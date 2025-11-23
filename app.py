@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.express as px
 
-df = pd.read_csv("AOI_DGMs.csv")
+df = pd.read_csv("CECS 450 Proejct 3 Option A data/CECS 450 Proejct 3 Option A data/AOI_DGMs.csv")
 
 fig = px.scatter(
     df,
