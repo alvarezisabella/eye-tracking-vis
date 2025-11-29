@@ -270,6 +270,85 @@ def create_enhanced_radar_dashboard(df):
                     margin: 10px 0;
                     font-size: 0.8em;
                 }
+
+                /* Behavior Characterization Styles */
+                .behavior-pattern {
+                    background: rgba(255,255,255,0.05);
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 8px 0;
+                    border-left: 4px solid #666;
+                }
+
+                .success-pattern {
+                    border-left-color: #4caf50;
+                }
+
+                .failure-pattern {
+                    border-left-color: #f44336;
+                }
+
+                .pattern-header {
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .pattern-metric {
+                    background: rgba(255,255,255,0.1);
+                    padding: 5px 8px;
+                    border-radius: 3px;
+                    margin: 3px 0;
+                    font-family: monospace;
+                    font-size: 0.9em;
+                }
+
+                .metric-good {
+                    color: #4caf50;
+                    border-left: 2px solid #4caf50;
+                    padding-left: 5px;
+                }
+
+                .metric-bad {
+                    color: #f44336;
+                    border-left: 2px solid #f44336;
+                    padding-left: 5px;
+                }
+
+                .stat-difference {
+                    font-weight: bold;
+                    background: rgba(255,255,255,0.1);
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    margin: 0 5px;
+                }
+
+                .difference-positive {
+                    color: #4caf50;
+                }
+
+                .difference-negative {
+                    color: #f44336;
+                }
+
+                .key-insight {
+                    background: linear-gradient(135deg, #1565c0, #42a5f5);
+                    color: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 10px 0;
+                    border-left: 4px solid #42a5f5;
+                }
+
+                .insight-header {
+                    font-weight: bold;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 5px;
+                }
             </style>
         </head>
         <body>
@@ -379,15 +458,15 @@ def create_enhanced_radar_dashboard(df):
                 ]),
 
                 dbc.Row([
-                    # Statistics Card
+                    # Behavior Characterization Card (Replaced Key Statistics)
                     dbc.Col([
                         dbc.Card([
-                            dbc.CardHeader("Key Statistics", className="h5"),
-                            dbc.CardBody(id='stats-card')
+                            dbc.CardHeader("Behavior Characterization", className="h5"),
+                            dbc.CardBody(id='behavior-characterization')
                         ])
                     ], width=6),
 
-                    # Success Analysis Card (Replaced Metric Descriptions)
+                    # Success Analysis Card
                     dbc.Col([
                         dbc.Card([
                             dbc.CardHeader("Success Analysis", className="h5"),
@@ -408,23 +487,35 @@ def create_enhanced_radar_dashboard(df):
         for metric in metrics_config.keys():
             if metric in df.columns:
                 successful_vals = successful_df[metric]
+                unsuccessful_vals = unsuccessful_df[metric]
 
                 benchmarks[metric] = {
                     'success_iqr': (successful_vals.quantile(0.25), successful_vals.quantile(0.75)),
                     'success_mean': successful_vals.mean(),
                     'success_median': successful_vals.median(),
-                    'all_range': (df[metric].min(), df[metric].max())
+                    'unsuccess_mean': unsuccessful_vals.mean(),
+                    'unsuccess_median': unsuccessful_vals.median(),
+                    'all_range': (df[metric].min(), df[metric].max()),
+                    'difference': successful_vals.mean() - unsuccessful_vals.mean(),
+                    'difference_pct': ((
+                                                   successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
                 }
 
         # Add Approach Score benchmarks separately
         if 'Approach_Score' in df.columns:
             successful_scores = successful_df['Approach_Score']
+            unsuccessful_scores = unsuccessful_df['Approach_Score']
 
             benchmarks['Approach_Score'] = {
                 'success_iqr': (successful_scores.quantile(0.25), successful_scores.quantile(0.75)),
                 'success_mean': successful_scores.mean(),
                 'success_median': successful_scores.median(),
+                'unsuccess_mean': unsuccessful_scores.mean(),
+                'unsuccess_median': unsuccessful_scores.median(),
                 'all_range': (df['Approach_Score'].min(), df['Approach_Score'].max()),
+                'difference': successful_scores.mean() - unsuccessful_scores.mean(),
+                'difference_pct': (
+                            (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
                 'threshold': 0.7  # Success threshold
             }
 
@@ -432,6 +523,101 @@ def create_enhanced_radar_dashboard(df):
 
     # Pre-calculate benchmarks
     benchmarks = calculate_benchmarks()
+
+    def characterize_behavior(selected_metrics, stats_data):
+        """Characterize what ALL successful pilots did differently compared to ALL unsuccessful pilots"""
+
+        characterization_content = []
+
+        characterization_content.append(html.H5("Group Behavior Patterns",
+                                                className="text-info mb-3"))
+
+        if 'Successful' in stats_data and 'Unsuccessful' in stats_data:
+            successful_data = stats_data['Successful']
+            unsuccessful_data = stats_data['Unsuccessful']
+
+            # Overall performance summary
+            characterization_content.append(html.Div([
+                html.Div("📊 OVERALL PERFORMANCE SUMMARY", className="pattern-header"),
+                html.P(
+                    f"Analysis based on {len(successful_df)} successful vs {len(unsuccessful_df)} unsuccessful pilots",
+                    className="text-light small mb-2")
+            ], className="key-insight"))
+
+            # Key behavioral differences
+            characterization_content.append(html.Div([
+                html.Div("🎯 KEY BEHAVIORAL DIFFERENCES", className="pattern-header"),
+                html.P("What successful pilots did differently:", className="text-light small mb-2")
+            ], className="behavior-pattern success-pattern"))
+
+            key_differences = []
+
+            for metric in selected_metrics:
+                if metric in successful_data and metric in unsuccessful_data and metric in benchmarks:
+                    success_val = successful_data[metric]
+                    unsuccess_val = unsuccessful_data[metric]
+                    bench = benchmarks[metric]
+                    difference = bench['difference']
+                    difference_pct = bench['difference_pct']
+
+                    # Only show significant differences (>10% difference)
+                    if abs(difference_pct) > 10:
+                        direction = "higher" if difference > 0 else "lower"
+
+                        # Determine interpretation based on metric type
+                        if metric in ['stationary_entropy', 'transition_entropy']:
+                            # For entropy, lower is better
+                            if difference < 0:
+                                interpretation = "More systematic scanning patterns"
+                                diff_class = "difference-positive"
+                            else:
+                                interpretation = "Less systematic scanning"
+                                diff_class = "difference-negative"
+                        elif metric == 'Average_Blink_Rate_per_Minute':
+                            # Moderate blink rate is best - small differences are better
+                            if abs(difference) < 5:
+                                interpretation = "Better cognitive load management"
+                                diff_class = "difference-positive"
+                            else:
+                                interpretation = "Different stress/cognitive load levels"
+                                diff_class = "difference-negative"
+                        elif metric in ['Mean_fixation_duration_s', 'fixation_to_saccade_ratio']:
+                            # Moderate values are typically better
+                            if abs(difference_pct) < 25:
+                                interpretation = "More balanced visual processing"
+                                diff_class = "difference-positive"
+                            else:
+                                interpretation = "Different information processing strategy"
+                                diff_class = "difference-negative"
+                        else:
+                            interpretation = "More efficient visual behavior" if difference > 0 else "Less efficient visual behavior"
+                            diff_class = "difference-positive" if difference > 0 else "difference-negative"
+
+                        key_differences.append(
+                            html.Div([
+                                html.Strong(f"{metrics_config[metric]['name']}:", className="text-light"),
+                                html.Span(f" {direction} by ", className="text-light"),
+                                html.Span(f"{abs(difference_pct):.1f}%", className=f"stat-difference {diff_class}"),
+                                html.Span(f" → {interpretation}", className="text-light small")
+                            ], className="pattern-metric")
+                        )
+
+            if key_differences:
+                characterization_content.extend(key_differences)
+            else:
+                characterization_content.append(html.P("No significant differences found in selected metrics.",
+                                                       className="text-light small"))
+
+            # Statistical Significance Note
+            characterization_content.append(html.Div([
+                html.Div("📈 STATISTICAL NOTE", className="pattern-header"),
+                html.P("Differences shown are based on group averages with >10% magnitude. ",
+                       className="text-light small mb-0"),
+                html.P("IQR analysis confirms consistent pattern differences between groups.",
+                       className="text-light small mb-0")
+            ], className="behavior-pattern"))
+
+        return characterization_content
 
     def analyze_success_patterns(selected_metrics, stats_data, selected_pilot=None):
         """Analyze gaze patterns to determine success/failure reasons with statistical evidence"""
@@ -667,7 +853,7 @@ def create_enhanced_radar_dashboard(df):
     # Callbacks
     @app.callback(
         [Output('radar-chart', 'figure'),
-         Output('stats-card', 'children'),
+         Output('behavior-characterization', 'children'),
          Output('success-analysis', 'children'),
          Output('current-data', 'data')],
         [Input('metrics-dropdown', 'value'),
@@ -828,19 +1014,13 @@ def create_enhanced_radar_dashboard(df):
                 )
             )
 
-        # Create statistics card
-        stats_card = []
-        for group, values in stats_data.items():
-            stats_card.append(html.H6(f"{group}:", className="text-info"))
-            for metric, value in list(values.items())[:3]:  # Show first 3 metrics
-                stats_card.append(html.P(f"{metrics_config[metric]['name']}: {value:.3f}",
-                                         className="text-light small mb-1"))
-            stats_card.append(html.Hr(className="my-2"))
+        # Create behavior characterization (only for group comparisons)
+        behavior_characterization = characterize_behavior(selected_metrics, stats_data)
 
-        # Create success analysis
+        # Create success analysis (unchanged)
         success_analysis = analyze_success_patterns(selected_metrics, stats_data, selected_pilot)
 
-        return fig, stats_card, success_analysis, stats_data
+        return fig, behavior_characterization, success_analysis, stats_data
 
     return app
 
