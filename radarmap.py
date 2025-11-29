@@ -8,32 +8,10 @@ import dash_bootstrap_components as dbc
 # Read directly from your CSV file
 df = pd.read_csv('AOI_DGMs.csv')
 
-numeric_cols = [
-    # main metrics
-    'Mean_fixation_duration_s', 'mean_saccade_length', 'Average_Peak_Saccade_Velocity',
-    'stationary_entropy', 'transition_entropy', 'Average_Blink_Rate_per_Minute',
-    'fixation_to_saccade_ratio', 'Total_Number_of_Fixations',
-    'Sum_of_all_fixation_duration_s', 'total_number_of_saccades',
-
-    # AOI bar columns
-    'Window_Mean_fixation_duration_s', 'AI_Mean_fixation_duration_s',
-    'Alt_VSI_Mean_fixation_duration_s', 'ASI_Mean_fixation_duration_s',
-    'TI_HSI_Mean_fixation_duration_s', 'SSI_Mean_fixation_duration_s',
-    'RPM_Mean_fixation_duration_s', 'NoAOI_Mean_fixation_duration_s',
-
-    # Used in parallel coordinates
-    'Approach_Score'
-]
-
-# Handles null values in file
-for col in numeric_cols:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
 
 def create_enhanced_radar_dashboard(df):
     """
-    Create an enhanced 3D radar chart dashboard with comprehensive interactive features
+    Create an enhanced 3D radar chart dashboard with data-driven success/failure analysis
     """
 
     # Available metrics with descriptions
@@ -80,39 +58,31 @@ def create_enhanced_radar_dashboard(df):
         }
     }
 
-    # Available metrics for bar chart
-    bar_config = {
-        'Window_Mean_fixation_duration_s': {
-            'name': 'Window',
-            'description': 'Average time spent looking at window',
+    # Calculate benchmark statistics from the dataset
+    successful_df = df[df['pilot_success'] == 'Successful']
+    unsuccessful_df = df[df['pilot_success'] == 'Unsuccessful']
+
+    # Success/Failure analysis configurations with data-driven benchmarks
+    success_analysis_config = {
+        'success_patterns': {
+            'title': '✅ SUCCESSFUL PATTERN',
+            'indicators': [
+                'Moderate to long fixation duration (thorough processing)',
+                'Low fixation and transition entropy (systematic scanning)',
+                'Balanced fixation/saccade ratio (efficient visual strategy)',
+                'Moderate saccade length (optimal area coverage)',
+                'Stable blink rate (managed cognitive load)'
+            ]
         },
-        'AI_Mean_fixation_duration_s': {
-            'name': 'AI',
-            'description': 'Average time spent looking at AI',
-        },
-        'Alt_VSI_Mean_fixation_duration_s': {
-            'name': 'Alt VSI',
-            'description': 'Average time spent looking at ALT',
-        },
-        'ASI_Mean_fixation_duration_s': {
-            'name': 'ASI',
-            'description': 'Average time spent looking at ASI',
-        },
-        'TI_HSI_Mean_fixation_duration_s': {
-            'name': 'TI HSI',
-            'description': 'Average time spent looking at TI',
-        },
-        'SSI_Mean_fixation_duration_s': {
-            'name': 'SSI',
-            'description': 'Average time spent looking at SSI',
-        },
-        'RPM_Mean_fixation_duration_s': {
-            'name': 'RPM',
-            'description': 'Average time spent looking at RPM',
-        },
-        'NoAOI_Mean_fixation_duration_s': {
-            'name': 'NoAOI',
-            'description': 'Average time spent looking at NoAOI',
+        'failure_patterns': {
+            'title': '❌ FAILED PATTERN',
+            'indicators': [
+                'Extremely short or long fixation duration (rushed or stuck)',
+                'High entropy values (random, unorganized scanning)',
+                'Imbalanced fixation/saccade ratio (over-fixating or over-scanning)',
+                'Extreme saccade lengths (too narrow or too broad focus)',
+                'High blink rate (cognitive overload or fatigue)'
+            ]
         }
     }
 
@@ -172,6 +142,133 @@ def create_enhanced_radar_dashboard(df):
                 .dash-radio-items label {
                     color: white !important;
                     margin-right: 15px;
+                }
+
+                /* Success/Failure status styling */
+                .success-status {
+                    background: linear-gradient(135deg, #2e7d32, #4caf50);
+                    color: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    text-align: center;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }
+
+                .failure-status {
+                    background: linear-gradient(135deg, #c62828, #f44336);
+                    color: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    text-align: center;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }
+
+                /* Stat highlight styling */
+                .stat-highlight {
+                    background: rgba(255,255,255,0.1);
+                    padding: 5px;
+                    border-radius: 3px;
+                    margin: 2px 0;
+                    font-family: monospace;
+                }
+
+                .good-stat {
+                    border-left: 3px solid #4caf50;
+                }
+
+                .bad-stat {
+                    border-left: 3px solid #f44336;
+                }
+
+                .neutral-stat {
+                    border-left: 3px solid #ff9800;
+                }
+
+                .metric-item {
+                    background: rgba(255,255,255,0.05);
+                    padding: 8px;
+                    margin: 5px 0;
+                    border-radius: 4px;
+                    border-left: 4px solid #666;
+                }
+
+                .metric-good {
+                    border-left-color: #4caf50;
+                }
+
+                .metric-bad {
+                    border-left-color: #f44336;
+                }
+
+                .metric-neutral {
+                    border-left-color: #ff9800;
+                }
+
+                .range-text {
+                    font-size: 0.85em;
+                    color: #cccccc;
+                }
+
+                .iqr-text {
+                    font-size: 0.85em;
+                    font-weight: bold;
+                }
+
+                .iqr-good {
+                    color: #4caf50;
+                }
+
+                .iqr-bad {
+                    color: #f44336;
+                }
+
+                .approach-score {
+                    background: linear-gradient(135deg, #1565c0, #42a5f5);
+                    color: white;
+                    padding: 10px;
+                    border-radius: 5px;
+                    text-align: center;
+                    font-weight: bold;
+                    margin: 10px 0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 10px;
+                }
+
+                .score-value {
+                    font-size: 24px;
+                    font-weight: bold;
+                }
+
+                .score-status {
+                    font-size: 16px;
+                }
+
+                .threshold-info {
+                    background: rgba(255,255,255,0.1);
+                    padding: 8px;
+                    border-radius: 4px;
+                    border-left: 4px solid #ff9800;
+                    margin: 5px 0;
+                }
+
+                .metric-description {
+                    font-size: 0.75em;
+                    color: #aaaaaa;
+                    font-style: italic;
+                    margin-top: 2px;
+                }
+
+                .iqr-explanation {
+                    background: rgba(255,255,255,0.05);
+                    padding: 8px;
+                    border-radius: 4px;
+                    border-left: 4px solid #42a5f5;
+                    margin: 10px 0;
+                    font-size: 0.8em;
                 }
             </style>
         </head>
@@ -253,18 +350,16 @@ def create_enhanced_radar_dashboard(df):
                         dcc.RadioItems(
                             id='chart-style',
                             options=[
-                                {'label': ' 3D Radar', 'value': '3d'},
-                                {'label': ' 2D Radar', 'value': '2d'},
+                                {'label': ' Radar', 'value': '3d'},
                                 {'label': ' Parallel Coordinates', 'value': 'parallel'}
                             ],
                             value='3d',
                             className="mb-3"
                         ),
 
-                        # Action Buttons
+                        # Action Buttons - Only Reset button remains
                         dbc.Row([
-                            dbc.Col(dbc.Button("Export Chart", id="export-btn", color="primary", className="me-2")),
-                            dbc.Col(dbc.Button("Reset Filters", id="reset-btn", color="secondary"))
+                            dbc.Col(dbc.Button("Reset Filters", id="reset-btn", color="secondary"), width=12)
                         ])
                     ])
                 ], className="h-100")
@@ -292,45 +387,289 @@ def create_enhanced_radar_dashboard(df):
                         ])
                     ], width=6),
 
-                    # Metric Descriptions Card
+                    # Success Analysis Card (Replaced Metric Descriptions)
                     dbc.Col([
                         dbc.Card([
-                            dbc.CardHeader("Metric Descriptions", className="h5"),
-                            dbc.CardBody(id='metric-descriptions')
+                            dbc.CardHeader("Success Analysis", className="h5"),
+                            dbc.CardBody(id='success-analysis')
                         ])
                     ], width=6)
                 ], className="mt-3")
-            ], width=9),
-
-            # Second visualization Card
-            dbc.Col([
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardHeader("Second Visualization", className="h5"),
-                            dbc.CardBody([
-                                dcc.Graph(id='bar-chart', style={'height': '600px'})
-                            ])
-                        ])
-                    ])
-                ])
-            ])
+            ], width=9)
         ]),
 
         # Hidden div for storing intermediate values
-        dcc.Store(id='current-data'),
-
-        # Download component
-        dcc.Download(id="download-chart")
+        dcc.Store(id='current-data')
     ], fluid=True, style={'backgroundColor': '#1a1a1a'})
+
+    def calculate_benchmarks():
+        """Calculate statistical benchmarks from the dataset"""
+        benchmarks = {}
+        for metric in metrics_config.keys():
+            if metric in df.columns:
+                successful_vals = successful_df[metric]
+
+                benchmarks[metric] = {
+                    'success_iqr': (successful_vals.quantile(0.25), successful_vals.quantile(0.75)),
+                    'success_mean': successful_vals.mean(),
+                    'success_median': successful_vals.median(),
+                    'all_range': (df[metric].min(), df[metric].max())
+                }
+
+        # Add Approach Score benchmarks separately
+        if 'Approach_Score' in df.columns:
+            successful_scores = successful_df['Approach_Score']
+
+            benchmarks['Approach_Score'] = {
+                'success_iqr': (successful_scores.quantile(0.25), successful_scores.quantile(0.75)),
+                'success_mean': successful_scores.mean(),
+                'success_median': successful_scores.median(),
+                'all_range': (df['Approach_Score'].min(), df['Approach_Score'].max()),
+                'threshold': 0.7  # Success threshold
+            }
+
+        return benchmarks
+
+    # Pre-calculate benchmarks
+    benchmarks = calculate_benchmarks()
+
+    def analyze_success_patterns(selected_metrics, stats_data, selected_pilot=None):
+        """Analyze gaze patterns to determine success/failure reasons with statistical evidence"""
+
+        analysis_content = []
+
+        if selected_pilot:
+            # Individual pilot analysis
+            pilot_key = f'Pilot {selected_pilot}'
+            if pilot_key in stats_data:
+                pilot_data = stats_data[pilot_key]
+                pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
+
+                # Status header
+                status_class = "success-status" if pilot_success == 'Successful' else "failure-status"
+                status_text = f"✅ PILOT {selected_pilot} - SUCCESSFUL" if pilot_success == 'Successful' else f"❌ PILOT {selected_pilot} - FAILED"
+
+                analysis_content.append(html.Div(status_text, className=status_class))
+
+                # Add IQR explanation
+                iqr_explanation = html.Div([
+                    html.Strong("📊 About IQR (Interquartile Range):", className="text-light"),
+                    html.Br(),
+                    html.Span("IQR shows the middle 50% of successful pilots (25th to 75th percentile). ",
+                              className="text-light small"),
+                    html.Span("Values within IQR represent typical expert performance.", className="text-light small")
+                ], className="iqr-explanation")
+
+                analysis_content.append(iqr_explanation)
+
+                # Add Approach Score section
+                if 'Approach_Score' in df.columns and 'Approach_Score' in benchmarks:
+                    pilot_score = df[df['PID'] == selected_pilot]['Approach_Score'].iloc[0]
+                    bench = benchmarks['Approach_Score']
+                    success_iqr_low, success_iqr_high = bench['success_iqr']
+                    threshold = bench['threshold']
+
+                    # Determine score status
+                    if pilot_success == 'Successful':
+                        if pilot_score >= 0.9:
+                            score_status = "Excellent"
+                            score_color = "text-success"
+                        elif pilot_score >= 0.8:
+                            score_status = "Very Good"
+                            score_color = "text-success"
+                        elif pilot_score >= threshold:
+                            score_status = "Good"
+                            score_color = "text-success"
+                        else:
+                            score_status = "Marginal"
+                            score_color = "text-warning"
+                    else:
+                        if pilot_score >= threshold:
+                            score_status = "Near Success"
+                            score_color = "text-warning"
+                        elif pilot_score >= 0.5:
+                            score_status = "Below Standard"
+                            score_color = "text-warning"
+                        else:
+                            score_status = "Poor"
+                            score_color = "text-danger"
+
+                    approach_score_display = html.Div([
+                        html.H6("Approach Score", className="text-center text-light"),
+                        html.Div([
+                            html.Span(f"{pilot_score:.3f}", className="score-value"),
+                            html.Span(f"{score_status}", className=f"score-status {score_color}")
+                        ], className="approach-score"),
+                        html.Div([
+                            html.Strong("Success Threshold: ≥ 0.7", className="text-light"),
+                            html.Br(),
+                            html.Span(f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f}",
+                                      className="iqr-text iqr-good")
+                        ], className="threshold-info")
+                    ])
+
+                    analysis_content.append(approach_score_display)
+
+                # Show ALL metrics with detailed statistical analysis
+                analysis_content.append(html.H6("Gaze Metrics Analysis:", className="text-info mt-3"))
+
+                for metric in selected_metrics:
+                    if metric in pilot_data and metric in benchmarks:
+                        value = pilot_data[metric]
+                        bench = benchmarks[metric]
+                        success_iqr_low, success_iqr_high = bench['success_iqr']
+
+                        # Determine status and reasoning based only on success IQR
+                        if success_iqr_low <= value <= success_iqr_high:
+                            status_class = "metric-good"
+                            reasoning = f"Within typical successful range (IQR)"
+                            iqr_color_class = "iqr-good"
+                        elif value < success_iqr_low:
+                            if 'entropy' in metric:
+                                status_class = "metric-good"
+                                reasoning = f"Better than typical - more systematic"
+                                iqr_color_class = "iqr-good"
+                            else:
+                                status_class = "metric-bad"
+                                reasoning = f"Below typical successful range"
+                                iqr_color_class = "iqr-bad"
+                        else:
+                            if 'entropy' in metric:
+                                status_class = "metric-bad"
+                                reasoning = f"Above typical successful range - less systematic"
+                                iqr_color_class = "iqr-bad"
+                            else:
+                                status_class = "metric-bad"
+                                reasoning = f"Above typical successful range"
+                                iqr_color_class = "iqr-bad"
+
+                        # Create metric item with description and IQR data
+                        metric_item = html.Div([
+                            html.Strong(f"{metrics_config[metric]['name']}: {value:.3f}", className="text-light"),
+                            html.Br(),
+                            html.Span(f"{metrics_config[metric]['description']}", className="metric-description"),
+                            html.Br(),
+                            html.Span(f"Status: {reasoning}", className="text-light small"),
+                            html.Br(),
+                            html.Span(f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f}",
+                                      className=f"iqr-text {iqr_color_class}")
+                        ], className=f"metric-item {status_class}")
+
+                        analysis_content.append(metric_item)
+
+                # Summary section
+                analysis_content.append(html.H6("Performance Summary:", className="text-warning mt-3"))
+
+                if pilot_success == 'Successful':
+                    analysis_content.append(html.P(
+                        "This pilot demonstrates strong expert gaze patterns with metrics predominantly within typical successful ranges.",
+                        className="text-light small"))
+                else:
+                    analysis_content.append(html.P(
+                        "This pilot shows suboptimal gaze behaviors with several metrics outside typical successful patterns.",
+                        className="text-light small"))
+
+        else:
+            # Group comparison analysis
+            analysis_content.append(html.H5("Group Performance Analysis", className="text-info mb-3"))
+
+            # Add IQR explanation
+            iqr_explanation = html.Div([
+                html.Strong("📊 About IQR (Interquartile Range):", className="text-light"),
+                html.Br(),
+                html.Span("IQR shows the middle 50% of successful pilots (25th to 75th percentile). ",
+                          className="text-light small"),
+                html.Span("Values within IQR represent typical expert performance.", className="text-light small")
+            ], className="iqr-explanation")
+
+            analysis_content.append(iqr_explanation)
+
+            # Add Approach Score comparison
+            if 'Approach_Score' in df.columns and 'Approach_Score' in benchmarks:
+                bench = benchmarks['Approach_Score']
+                threshold = bench['threshold']
+                success_iqr_low, success_iqr_high = bench['success_iqr']
+
+                analysis_content.append(html.H6("Approach Score Comparison:", className="text-warning"))
+
+                approach_comparison = html.Div([
+                    html.Strong("Success Threshold: ≥ 0.7", className="text-light"),
+                    html.Br(),
+                    html.Span(
+                        f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f} (avg: {bench['success_mean']:.3f})",
+                        className="iqr-text iqr-good")
+                ], className="stat-highlight good-stat")
+
+                analysis_content.append(approach_comparison)
+                analysis_content.append(html.Hr(className="my-3"))
+
+            if 'Successful' in stats_data and 'Unsuccessful' in stats_data:
+                successful_data = stats_data['Successful']
+                unsuccessful_data = stats_data['Unsuccessful']
+
+                # Show ALL metrics comparison with only success IQR
+                analysis_content.append(html.H6("Gaze Metrics Comparison:", className="text-warning"))
+
+                for metric in selected_metrics:
+                    if metric in successful_data and metric in unsuccessful_data and metric in benchmarks:
+                        success_val = successful_data[metric]
+                        unsuccess_val = unsuccessful_data[metric]
+                        bench = benchmarks[metric]
+                        success_iqr_low, success_iqr_high = bench['success_iqr']
+
+                        # Simple comparison - check if unsuccessful average is within success IQR
+                        if success_iqr_low <= unsuccess_val <= success_iqr_high:
+                            status_class = "neutral-stat"
+                            comparison = f"Unsuccessful avg within typical successful range"
+                        else:
+                            status_class = "good-stat"
+                            comparison = f"Clear difference from typical successful pattern"
+
+                        metric_item = html.Div([
+                            html.Strong(f"{metrics_config[metric]['name']}: ", className="text-light"),
+                            html.Br(),
+                            html.Span(f"{metrics_config[metric]['description']}", className="metric-description"),
+                            html.Br(),
+                            html.Span(
+                                f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f} (avg: {success_val:.3f})",
+                                className="iqr-text iqr-good"),
+                            html.Br(),
+                            html.Span(f"Unsuccessful average: {unsuccess_val:.3f}",
+                                      className="text-danger"),
+                            html.Br(),
+                            html.Span(f"Comparison: {comparison}",
+                                      className="text-light")
+                        ], className=f"stat-highlight {status_class}")
+
+                        analysis_content.append(metric_item)
+
+            # Add benchmark summary
+            analysis_content.append(html.Hr(className="my-3"))
+            analysis_content.append(html.H6("Dataset Benchmarks:", className="text-info"))
+            analysis_content.append(
+                html.P(f"Successful pilots: {len(successful_df)} samples (≥ 0.7)", className="text-light small"))
+            analysis_content.append(
+                html.P(f"Unsuccessful pilots: {len(unsuccessful_df)} samples (< 0.7)", className="text-light small"))
+            analysis_content.append(
+                html.P(f"Total gaze metrics analyzed: {len(selected_metrics)}", className="text-light small"))
+
+            # Add general patterns with statistical basis
+            analysis_content.append(html.H6("Successful Pilot Pattern:", className="text-success mt-3"))
+            for indicator in success_analysis_config['success_patterns']['indicators']:
+                analysis_content.append(html.P(f"✓ {indicator}", className="text-light small mb-1"))
+
+            analysis_content.append(html.H6("Failed Pilot Pattern:", className="text-danger mt-3"))
+            for indicator in success_analysis_config['failure_patterns']['indicators']:
+                analysis_content.append(html.P(f"✗ {indicator}", className="text-light small mb-1"))
+
+        return analysis_content
 
     # Callbacks
     @app.callback(
         [Output('radar-chart', 'figure'),
          Output('stats-card', 'children'),
-         Output('metric-descriptions', 'children'),
-         Output('current-data', 'data'),
-         Output('bar-chart', 'figure')],
+         Output('success-analysis', 'children'),
+         Output('current-data', 'data')],
         [Input('metrics-dropdown', 'value'),
          Input('normalization-toggle', 'value'),
          Input('group-checklist', 'value'),
@@ -339,9 +678,8 @@ def create_enhanced_radar_dashboard(df):
          Input('reset-btn', 'n_clicks')],
         [State('metrics-dropdown', 'options')]
     )
-    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot,
-                         chart_style, reset_clicks, metric_options):
-
+    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot, chart_style, reset_clicks,
+                         metric_options):
         # Handle reset button
         ctx = callback_context
         if ctx.triggered and ctx.triggered[0]['prop_id'] == 'reset-btn.n_clicks':
@@ -351,19 +689,8 @@ def create_enhanced_radar_dashboard(df):
             selected_pilot = None
             chart_style = '3d'
 
-        # Ensure we have some selected metrics
-        if not selected_metrics:
-            selected_metrics = default_metrics
-
-        # Only use metrics that exist
-        radar_metrics = [
-            m for m in selected_metrics
-            if m in metrics_config and m in df.columns
-        ]
-
-        # Fallback if fewer than 3 valid metrics are selected
-        if len(radar_metrics) < 3:
-            radar_metrics = [m for m in default_metrics if m in df.columns][:3]
+        if not selected_metrics or len(selected_metrics) < 3:
+            selected_metrics = default_metrics[:3]
 
         # Prepare data
         traces = []
@@ -376,16 +703,17 @@ def create_enhanced_radar_dashboard(df):
                 return pd.Series([0.5] * len(series), index=series.index)
             return (series - series.min()) / range_val
 
-        # Add group traces (radar)
-        if "Successful" in selected_groups and len(radar_metrics) > 0:
-            successful_data_raw = df[df['pilot_success'] == 'Successful'][radar_metrics].mean()
-            successful_data = normalize_series(successful_data_raw) if normalize else successful_data_raw
-            stats_data['Successful'] = successful_data_raw.to_dict()
+        # Add group traces
+        if "Successful" in selected_groups:
+            successful_data = df[df['pilot_success'] == 'Successful'][selected_metrics].mean()
+            if normalize:
+                successful_data = normalize_series(successful_data)
+            stats_data['Successful'] = df[df['pilot_success'] == 'Successful'][selected_metrics].mean().to_dict()
 
             traces.append(go.Scatterpolar(
                 r=np.append(successful_data.values, successful_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in radar_metrics],
-                                [metrics_config[radar_metrics[0]]['name']]),
+                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                [metrics_config[selected_metrics[0]]['name']]),
                 fill='toself',
                 fillcolor='rgba(76, 175, 80, 0.4)',
                 line=dict(color='rgb(76, 175, 80)', width=3),
@@ -393,15 +721,16 @@ def create_enhanced_radar_dashboard(df):
                 hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
             ))
 
-        if "Unsuccessful" in selected_groups and len(radar_metrics) > 0:
-            unsuccessful_data_raw = df[df['pilot_success'] == 'Unsuccessful'][radar_metrics].mean()
-            unsuccessful_data = normalize_series(unsuccessful_data_raw) if normalize else unsuccessful_data_raw
-            stats_data['Unsuccessful'] = unsuccessful_data_raw.to_dict()
+        if "Unsuccessful" in selected_groups:
+            unsuccessful_data = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean()
+            if normalize:
+                unsuccessful_data = normalize_series(unsuccessful_data)
+            stats_data['Unsuccessful'] = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean().to_dict()
 
             traces.append(go.Scatterpolar(
                 r=np.append(unsuccessful_data.values, unsuccessful_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in radar_metrics],
-                                [metrics_config[radar_metrics[0]]['name']]),
+                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                [metrics_config[selected_metrics[0]]['name']]),
                 fill='toself',
                 fillcolor='rgba(244, 67, 54, 0.4)',
                 line=dict(color='rgb(244, 67, 54)', width=3),
@@ -409,15 +738,16 @@ def create_enhanced_radar_dashboard(df):
                 hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
             ))
 
-        if "All" in selected_groups and len(radar_metrics) > 0:
-            all_data_raw = df[radar_metrics].mean()
-            all_data = normalize_series(all_data_raw) if normalize else all_data_raw
-            stats_data['All'] = all_data_raw.to_dict()
+        if "All" in selected_groups:
+            all_data = df[selected_metrics].mean()
+            if normalize:
+                all_data = normalize_series(all_data)
+            stats_data['All'] = df[selected_metrics].mean().to_dict()
 
             traces.append(go.Scatterpolar(
                 r=np.append(all_data.values, all_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in radar_metrics],
-                                [metrics_config[radar_metrics[0]]['name']]),
+                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                [metrics_config[selected_metrics[0]]['name']]),
                 fill='toself',
                 fillcolor='rgba(33, 150, 243, 0.4)',
                 line=dict(color='rgb(33, 150, 243)', width=3),
@@ -426,43 +756,37 @@ def create_enhanced_radar_dashboard(df):
             ))
 
         # Add individual pilot trace if selected
-        if selected_pilot and len(radar_metrics) > 0:
-            pilot_row = df[df['PID'] == selected_pilot]
-            if not pilot_row.empty:
-                pilot_data_raw = pilot_row[radar_metrics].iloc[0]
-                pilot_data = normalize_series(pilot_data_raw) if normalize else pilot_data_raw
-                stats_data[f'Pilot {selected_pilot}'] = pilot_data_raw.to_dict()
+        if selected_pilot:
+            pilot_data = df[df['PID'] == selected_pilot][selected_metrics].iloc[0]
+            if normalize:
+                pilot_data = normalize_series(pilot_data)
+            stats_data[f'Pilot {selected_pilot}'] = df[df['PID'] == selected_pilot][selected_metrics].iloc[0].to_dict()
 
-                pilot_success = pilot_row['pilot_success'].iloc[0]
-                color = 'rgb(76, 175, 80)' if pilot_success == 'Successful' else 'rgb(244, 67, 54)'
+            pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
+            # Use blue color for individual pilots
+            color = 'rgb(33, 150, 243)'  # Blue color for individual pilots
 
-                traces.append(go.Scatterpolar(
-                    r=np.append(pilot_data.values, pilot_data.values[0]),
-                    theta=np.append([metrics_config[m]['name'] for m in radar_metrics],
-                                    [metrics_config[radar_metrics[0]]['name']]),
-                    line=dict(color=color, width=4, dash='dash'),
-                    name=f'Pilot {selected_pilot} ({pilot_success})',
-                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-                ))
+            traces.append(go.Scatterpolar(
+                r=np.append(pilot_data.values, pilot_data.values[0]),
+                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                [metrics_config[selected_metrics[0]]['name']]),
+                fill=None,  # No fill for individual pilots
+                line=dict(color=color, width=4, dash='dash'),
+                name=f'Pilot {selected_pilot} ({pilot_success})',
+                hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
+            ))
 
         # Create figure based on chart style
-        if chart_style == 'parallel' and len(radar_metrics) > 0:
+        if chart_style == 'parallel':
             fig = go.Figure(data=go.Parcoords(
-                line=dict(
-                    color=df['Approach_Score'] if 'Approach_Score' in df.columns else np.zeros(len(df)),
-                    colorscale='Viridis',
-                    showscale=True,
-                    cmin=df['Approach_Score'].min() if 'Approach_Score' in df.columns else 0,
-                    cmax=df['Approach_Score'].max() if 'Approach_Score' in df.columns else 1
-                ),
-                dimensions=[
-                    dict(
-                        range=[df[col].min(), df[col].max()],
-                        label=metrics_config[col]['name'],
-                        values=df[col]
-                    )
-                    for col in radar_metrics
-                ]
+                line=dict(color=df['Approach_Score'],
+                          colorscale='Viridis',
+                          showscale=True,
+                          cmin=df['Approach_Score'].min(),
+                          cmax=df['Approach_Score'].max()),
+                dimensions=[dict(range=[df[col].min(), df[col].max()],
+                                 label=metrics_config[col]['name'], values=df[col])
+                            for col in selected_metrics]
             ))
             fig.update_layout(
                 title="Parallel Coordinates Plot",
@@ -472,17 +796,12 @@ def create_enhanced_radar_dashboard(df):
             )
         else:
             fig = go.Figure(data=traces)
-            if len(radar_metrics) > 0:
-                radial_min = df[radar_metrics].min().min()
-                radial_max = df[radar_metrics].max().max()
-            else:
-                radial_min, radial_max = 0, 1
-
             fig.update_layout(
                 polar=dict(
                     radialaxis=dict(
                         visible=True,
-                        range=[0, 1] if normalize else [radial_min, radial_max],
+                        range=[0, 1] if normalize else [df[selected_metrics].min().min(),
+                                                        df[selected_metrics].max().max()],
                         gridcolor='rgba(255,255,255,0.3)',
                         tickfont=dict(color='white')
                     ),
@@ -503,7 +822,7 @@ def create_enhanced_radar_dashboard(df):
                 font=dict(color='white'),
                 height=550,
                 title=dict(
-                    text=f"Gaze Behavior Profile Comparison<br><sub>{'Normalized ' if normalize else ''}Metrics: {len(radar_metrics)} selected</sub>",
+                    text=f"Gaze Behavior Profile Comparison<br><sub>{'Normalized ' if normalize else ''}Metrics: {len(selected_metrics)} selected</sub>",
                     font=dict(color='white', size=16),
                     x=0.5
                 )
@@ -513,107 +832,21 @@ def create_enhanced_radar_dashboard(df):
         stats_card = []
         for group, values in stats_data.items():
             stats_card.append(html.H6(f"{group}:", className="text-info"))
-            # Show first 3 metrics
-            for metric, value in list(values.items())[:3]:
-                if metric in metrics_config:
-                    label = metrics_config[metric]['name']
-                else:
-                    label = metric
-                stats_card.append(
-                    html.P(
-                        f"{label}: {value:.3f}",
-                        className="text-light small mb-1"
-                    )
-                )
+            for metric, value in list(values.items())[:3]:  # Show first 3 metrics
+                stats_card.append(html.P(f"{metrics_config[metric]['name']}: {value:.3f}",
+                                         className="text-light small mb-1"))
             stats_card.append(html.Hr(className="my-2"))
 
-        # Create metric descriptions (radar metrics)
-        metric_descriptions = []
-        for metric in radar_metrics:
-            metric_descriptions.append(
-                html.Div([
-                    html.Strong(metrics_config[metric]['name'], className="text-warning"),
-                    html.P(metrics_config[metric]['description'], className="text-light small mb-2")
-                ])
-            )
+        # Create success analysis
+        success_analysis = analyze_success_patterns(selected_metrics, stats_data, selected_pilot)
 
-        # Bar chart
-        bar_metrics = [k for k in bar_config.keys() if k in df.columns]
-        bar_traces = []
-        individual_bar = [bar_config[m]['name'] for m in bar_metrics]
-
-        if bar_metrics:
-            # Add group traces (bar)
-            if "Successful" in selected_groups:
-                bar_success_raw = df[df['pilot_success'] == 'Successful'][bar_metrics].mean()
-                bar_success = normalize_series(bar_success_raw) if normalize else bar_success_raw
-
-                bar_traces.append(go.Bar(
-                    x=individual_bar,
-                    y=bar_success.values,
-                    name='Successful Pilots',
-                    marker=dict(color='rgb(76, 175, 80)')
-                ))
-
-            if "Unsuccessful" in selected_groups:
-                bar_unsuccess_raw = df[df['pilot_success'] == 'Unsuccessful'][bar_metrics].mean()
-                bar_unsuccess = normalize_series(bar_unsuccess_raw) if normalize else bar_unsuccess_raw
-
-                bar_traces.append(go.Bar(
-                    x=individual_bar,
-                    y=bar_unsuccess.values,
-                    name='Unsuccessful Pilots',
-                    marker=dict(color='rgb(244, 67, 54)')
-                ))
-
-        label_y = 'Mean Proportion Fixation Duration' if normalize else 'Metric Value'
-
-        bar_fig = go.Figure(data=bar_traces)
-        bar_fig.update_layout(
-            barmode='group',
-            xaxis=dict(
-                title=dict(
-                    text='AOI',
-                    font=dict(color='white')
-                ),
-                tickfont=dict(color='white')
-            ),
-            yaxis=dict(
-                title=dict(
-                    text=label_y,
-                    font=dict(color='white')
-                ),
-                tickfont=dict(color='white')
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            legend=dict(
-                bgcolor='rgba(0,0,0,0.5)',
-                font=dict(color='white')
-            ),
-            title=dict(
-                text='Proportion of Fixation Duration per AOI (Successful vs Unsuccessful)',
-                font=dict(color='white', size=16),
-                x=0.5
-            )
-        )
-
-        return fig, stats_card, metric_descriptions, stats_data, bar_fig
-
-    @app.callback(
-        Output("download-chart", "data"),
-        Input("export-btn", "n_clicks"),
-        prevent_initial_call=True,
-    )
-    def export_chart(n_clicks):
-        return dcc.send_file("./radar_chart_export.html")
+        return fig, stats_card, success_analysis, stats_data
 
     return app
 
 
 # Create and run the dashboard
-print("Starting Enhanced Chart Dashboard...")
+print("Starting Enhanced Radar Chart Dashboard...")
 print("Loading data from AOI_DGMs.csv...")
 print(f"Loaded {len(df)} pilots")
 print(f"Successful: {len(df[df['pilot_success'] == 'Successful'])}")
