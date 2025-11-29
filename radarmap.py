@@ -8,6 +8,28 @@ import dash_bootstrap_components as dbc
 # Read directly from your CSV file
 df = pd.read_csv('AOI_DGMs.csv')
 
+numeric_cols = [
+    # main metrics
+    'Mean_fixation_duration_s', 'mean_saccade_length', 'Average_Peak_Saccade_Velocity',
+    'stationary_entropy', 'transition_entropy', 'Average_Blink_Rate_per_Minute',
+    'fixation_to_saccade_ratio', 'Total_Number_of_Fixations',
+    'Sum_of_all_fixation_duration_s', 'total_number_of_saccades',
+
+    # AOI bar columns
+    'Window_Mean_fixation_duration_s', 'AI_Mean_fixation_duration_s',
+    'Alt_VSI_Mean_fixation_duration_s', 'ASI_Mean_fixation_duration_s',
+    'TI_HSI_Mean_fixation_duration_s', 'SSI_Mean_fixation_duration_s',
+    'RPM_Mean_fixation_duration_s', 'NoAOI_Mean_fixation_duration_s',
+
+    # Used in parallel coordinates
+    'Approach_Score'
+]
+
+# Handles null values in file
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
 
 def create_enhanced_radar_dashboard(df):
     """
@@ -55,6 +77,42 @@ def create_enhanced_radar_dashboard(df):
         'total_number_of_saccades': {
             'name': 'Total Saccades',
             'description': 'Total number of eye movements between fixations'
+        }
+    }
+
+    # Available metrics for bar chart
+    bar_config = {
+        'Window_Mean_fixation_duration_s': {
+            'name': 'Window',
+            'description': 'Average time spent looking at window',
+        },
+        'AI_Mean_fixation_duration_s': {
+            'name': 'AI',
+            'description': 'Average time spent looking at AI',
+        },
+        'Alt_VSI_Mean_fixation_duration_s': {
+            'name': 'Alt VSI',
+            'description': 'Average time spent looking at ALT',
+        },
+        'ASI_Mean_fixation_duration_s': {
+            'name': 'ASI',
+            'description': 'Average time spent looking at ASI',
+        },
+        'TI_HSI_Mean_fixation_duration_s': {
+            'name': 'TI HSI',
+            'description': 'Average time spent looking at TI',
+        },
+        'SSI_Mean_fixation_duration_s': {
+            'name': 'SSI',
+            'description': 'Average time spent looking at SSI',
+        },
+        'RPM_Mean_fixation_duration_s': {
+            'name': 'RPM',
+            'description': 'Average time spent looking at RPM',
+        },
+        'NoAOI_Mean_fixation_duration_s': {
+            'name': 'NoAOI',
+            'description': 'Average time spent looking at NoAOI',
         }
     }
 
@@ -424,15 +482,16 @@ def create_enhanced_radar_dashboard(df):
                             className="mb-3"
                         ),
 
-                        # Chart Style
-                        html.Label("Chart Style:", className="fw-bold text-light"),
+                        # Visualization Type
+                        html.Label("Visualization Type:", className="fw-bold text-light"),
                         dcc.RadioItems(
-                            id='chart-style',
+                            id='visualization-type',
                             options=[
-                                {'label': ' Radar', 'value': '3d'},
-                                {'label': ' Parallel Coordinates', 'value': 'parallel'}
+                                {'label': ' Radar', 'value': 'radar'},
+                                {'label': ' Parallel Coordinates', 'value': 'parallel'},
+                                {'label': ' AOI Bar Chart', 'value': 'bar'}
                             ],
-                            value='3d',
+                            value='radar',
                             className="mb-3"
                         ),
 
@@ -451,7 +510,7 @@ def create_enhanced_radar_dashboard(df):
                         dbc.Card([
                             dbc.CardHeader("Main Visualization", className="h5"),
                             dbc.CardBody([
-                                dcc.Graph(id='radar-chart', style={'height': '600px'})
+                                dcc.Graph(id='main-visualization', style={'height': '600px'})
                             ])
                         ])
                     ])
@@ -498,7 +557,7 @@ def create_enhanced_radar_dashboard(df):
                     'all_range': (df[metric].min(), df[metric].max()),
                     'difference': successful_vals.mean() - unsuccessful_vals.mean(),
                     'difference_pct': ((
-                                                   successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
+                                               successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
                 }
 
         # Add Approach Score benchmarks separately
@@ -515,7 +574,7 @@ def create_enhanced_radar_dashboard(df):
                 'all_range': (df['Approach_Score'].min(), df['Approach_Score'].max()),
                 'difference': successful_scores.mean() - unsuccessful_scores.mean(),
                 'difference_pct': (
-                            (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
+                        (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
                 'threshold': 0.7  # Success threshold
             }
 
@@ -852,7 +911,7 @@ def create_enhanced_radar_dashboard(df):
 
     # Callbacks
     @app.callback(
-        [Output('radar-chart', 'figure'),
+        [Output('main-visualization', 'figure'),
          Output('behavior-characterization', 'children'),
          Output('success-analysis', 'children'),
          Output('current-data', 'data')],
@@ -860,11 +919,11 @@ def create_enhanced_radar_dashboard(df):
          Input('normalization-toggle', 'value'),
          Input('group-checklist', 'value'),
          Input('pilot-dropdown', 'value'),
-         Input('chart-style', 'value'),
+         Input('visualization-type', 'value'),
          Input('reset-btn', 'n_clicks')],
         [State('metrics-dropdown', 'options')]
     )
-    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot, chart_style, reset_clicks,
+    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot, visualization_type, reset_clicks,
                          metric_options):
         # Handle reset button
         ctx = callback_context
@@ -873,13 +932,12 @@ def create_enhanced_radar_dashboard(df):
             normalize = True
             selected_groups = ["Successful", "Unsuccessful"]
             selected_pilot = None
-            chart_style = '3d'
+            visualization_type = 'radar'
 
         if not selected_metrics or len(selected_metrics) < 3:
             selected_metrics = default_metrics[:3]
 
         # Prepare data
-        traces = []
         stats_data = {}
 
         # Normalization function
@@ -889,81 +947,87 @@ def create_enhanced_radar_dashboard(df):
                 return pd.Series([0.5] * len(series), index=series.index)
             return (series - series.min()) / range_val
 
-        # Add group traces
+        # Add group data to stats_data
         if "Successful" in selected_groups:
-            successful_data = df[df['pilot_success'] == 'Successful'][selected_metrics].mean()
-            if normalize:
-                successful_data = normalize_series(successful_data)
             stats_data['Successful'] = df[df['pilot_success'] == 'Successful'][selected_metrics].mean().to_dict()
 
-            traces.append(go.Scatterpolar(
-                r=np.append(successful_data.values, successful_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                [metrics_config[selected_metrics[0]]['name']]),
-                fill='toself',
-                fillcolor='rgba(76, 175, 80, 0.4)',
-                line=dict(color='rgb(76, 175, 80)', width=3),
-                name='Successful Pilots (Avg)',
-                hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-            ))
-
         if "Unsuccessful" in selected_groups:
-            unsuccessful_data = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean()
-            if normalize:
-                unsuccessful_data = normalize_series(unsuccessful_data)
             stats_data['Unsuccessful'] = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean().to_dict()
 
-            traces.append(go.Scatterpolar(
-                r=np.append(unsuccessful_data.values, unsuccessful_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                [metrics_config[selected_metrics[0]]['name']]),
-                fill='toself',
-                fillcolor='rgba(244, 67, 54, 0.4)',
-                line=dict(color='rgb(244, 67, 54)', width=3),
-                name='Unsuccessful Pilots (Avg)',
-                hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-            ))
-
         if "All" in selected_groups:
-            all_data = df[selected_metrics].mean()
-            if normalize:
-                all_data = normalize_series(all_data)
             stats_data['All'] = df[selected_metrics].mean().to_dict()
 
-            traces.append(go.Scatterpolar(
-                r=np.append(all_data.values, all_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                [metrics_config[selected_metrics[0]]['name']]),
-                fill='toself',
-                fillcolor='rgba(33, 150, 243, 0.4)',
-                line=dict(color='rgb(33, 150, 243)', width=3),
-                name='All Pilots (Avg)',
-                hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-            ))
-
-        # Add individual pilot trace if selected
+        # Add individual pilot data if selected
         if selected_pilot:
-            pilot_data = df[df['PID'] == selected_pilot][selected_metrics].iloc[0]
-            if normalize:
-                pilot_data = normalize_series(pilot_data)
             stats_data[f'Pilot {selected_pilot}'] = df[df['PID'] == selected_pilot][selected_metrics].iloc[0].to_dict()
 
-            pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
-            # Use blue color for individual pilots
-            color = 'rgb(33, 150, 243)'  # Blue color for individual pilots
+        # Create visualization based on selected type
+        if visualization_type == 'bar':
+            # Bar chart visualization
+            bar_metrics = [k for k in bar_config.keys() if k in df.columns]
+            bar_traces = []
+            individual_bar = [bar_config[m]['name'] for m in bar_metrics]
 
-            traces.append(go.Scatterpolar(
-                r=np.append(pilot_data.values, pilot_data.values[0]),
-                theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                [metrics_config[selected_metrics[0]]['name']]),
-                fill=None,  # No fill for individual pilots
-                line=dict(color=color, width=4, dash='dash'),
-                name=f'Pilot {selected_pilot} ({pilot_success})',
-                hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-            ))
+            if bar_metrics:
+                # Add group traces (bar)
+                if "Successful" in selected_groups:
+                    bar_success_raw = df[df['pilot_success'] == 'Successful'][bar_metrics].mean()
+                    bar_success = normalize_series(bar_success_raw) if normalize else bar_success_raw
 
-        # Create figure based on chart style
-        if chart_style == 'parallel':
+                    bar_traces.append(go.Bar(
+                        x=individual_bar,
+                        y=bar_success.values,
+                        name='Successful Pilots',
+                        marker=dict(color='rgb(76, 175, 80)')
+                    ))
+
+                if "Unsuccessful" in selected_groups:
+                    bar_unsuccess_raw = df[df['pilot_success'] == 'Unsuccessful'][bar_metrics].mean()
+                    bar_unsuccess = normalize_series(bar_unsuccess_raw) if normalize else bar_unsuccess_raw
+
+                    bar_traces.append(go.Bar(
+                        x=individual_bar,
+                        y=bar_unsuccess.values,
+                        name='Unsuccessful Pilots',
+                        marker=dict(color='rgb(244, 67, 54)')
+                    ))
+
+            label_y = 'Mean Proportion Fixation Duration' if normalize else 'Metric Value'
+
+            fig = go.Figure(data=bar_traces)
+            fig.update_layout(
+                barmode='group',
+                xaxis=dict(
+                    title=dict(
+                        text='AOI',
+                        font=dict(color='white')
+                    ),
+                    tickfont=dict(color='white')
+                ),
+                yaxis=dict(
+                    title=dict(
+                        text=label_y,
+                        font=dict(color='white')
+                    ),
+                    tickfont=dict(color='white')
+                ),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                legend=dict(
+                    bgcolor='rgba(0,0,0,0.5)',
+                    font=dict(color='white')
+                ),
+                title=dict(
+                    text='Proportion of Fixation Duration per AOI (Successful vs Unsuccessful)',
+                    font=dict(color='white', size=16),
+                    x=0.5
+                ),
+                height=550
+            )
+
+        elif visualization_type == 'parallel':
+            # Parallel coordinates visualization
             fig = go.Figure(data=go.Parcoords(
                 line=dict(color=df['Approach_Score'],
                           colorscale='Viridis',
@@ -978,9 +1042,82 @@ def create_enhanced_radar_dashboard(df):
                 title="Parallel Coordinates Plot",
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white')
+                font=dict(color='white'),
+                height=550
             )
         else:
+            # Radar chart visualization (default)
+            traces = []
+
+            # Add group traces
+            if "Successful" in selected_groups:
+                successful_data = df[df['pilot_success'] == 'Successful'][selected_metrics].mean()
+                if normalize:
+                    successful_data = normalize_series(successful_data)
+
+                traces.append(go.Scatterpolar(
+                    r=np.append(successful_data.values, successful_data.values[0]),
+                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                    [metrics_config[selected_metrics[0]]['name']]),
+                    fill='toself',
+                    fillcolor='rgba(76, 175, 80, 0.4)',
+                    line=dict(color='rgb(76, 175, 80)', width=3),
+                    name='Successful Pilots (Avg)',
+                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
+                ))
+
+            if "Unsuccessful" in selected_groups:
+                unsuccessful_data = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean()
+                if normalize:
+                    unsuccessful_data = normalize_series(unsuccessful_data)
+
+                traces.append(go.Scatterpolar(
+                    r=np.append(unsuccessful_data.values, unsuccessful_data.values[0]),
+                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                    [metrics_config[selected_metrics[0]]['name']]),
+                    fill='toself',
+                    fillcolor='rgba(244, 67, 54, 0.4)',
+                    line=dict(color='rgb(244, 67, 54)', width=3),
+                    name='Unsuccessful Pilots (Avg)',
+                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
+                ))
+
+            if "All" in selected_groups:
+                all_data = df[selected_metrics].mean()
+                if normalize:
+                    all_data = normalize_series(all_data)
+
+                traces.append(go.Scatterpolar(
+                    r=np.append(all_data.values, all_data.values[0]),
+                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                    [metrics_config[selected_metrics[0]]['name']]),
+                    fill='toself',
+                    fillcolor='rgba(33, 150, 243, 0.4)',
+                    line=dict(color='rgb(33, 150, 243)', width=3),
+                    name='All Pilots (Avg)',
+                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
+                ))
+
+            # Add individual pilot trace if selected
+            if selected_pilot:
+                pilot_data = df[df['PID'] == selected_pilot][selected_metrics].iloc[0]
+                if normalize:
+                    pilot_data = normalize_series(pilot_data)
+
+                pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
+                # Use blue color for individual pilots
+                color = 'rgb(33, 150, 243)'  # Blue color for individual pilots
+
+                traces.append(go.Scatterpolar(
+                    r=np.append(pilot_data.values, pilot_data.values[0]),
+                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
+                                    [metrics_config[selected_metrics[0]]['name']]),
+                    fill=None,  # No fill for individual pilots
+                    line=dict(color=color, width=4, dash='dash'),
+                    name=f'Pilot {selected_pilot} ({pilot_success})',
+                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
+                ))
+
             fig = go.Figure(data=traces)
             fig.update_layout(
                 polar=dict(
