@@ -4,9 +4,124 @@ import numpy as np
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
+from collections import Counter
+from plotly.subplots import make_subplots
 
 # Read directly from your CSV file
 df = pd.read_csv('AOI_DGMs.csv')
+
+# AOI mapping with full instrument names (from patterncompare.py)
+AOI_NAMES = {
+    'A': 'No AOI',
+    'B': 'Altitude/VSI',
+    'C': 'Attitude Indicator',
+    'D': 'Turn/Heading',
+    'E': 'Speed/Slip Indicator',
+    'F': 'Airspeed Indicator',
+    'G': 'RPM',
+    'H': 'Window (Outside)'
+}
+
+
+# Analysis functions (from patterncompare.py)
+def count_aoi_occurrences(df, pattern_column, freq_column):
+    """Count weighted AOI occurrences"""
+    aoi_counts = {aoi: 0 for aoi in AOI_NAMES.keys()}
+    for _, row in df.iterrows():
+        pattern = str(row[pattern_column])
+        freq = row[freq_column]
+        for char in pattern:
+            if char in aoi_counts:
+                aoi_counts[char] += freq
+    return aoi_counts
+
+
+def analyze_pattern_characteristics(df, pattern_column, freq_column):
+    """Analyze pattern characteristics"""
+    patterns = df[pattern_column].values
+    frequencies = df[freq_column].values
+
+    # Repetitive patterns (same AOI repeated)
+    repetitive = sum(freq for pattern, freq in zip(patterns, frequencies)
+                     if len(set(str(pattern))) == 1)
+
+    # Back-and-forth patterns (ABAB, BCBC, etc.)
+    back_forth = sum(freq for pattern, freq in zip(patterns, frequencies)
+                     if len(str(pattern)) >= 4 and
+                     str(pattern)[0] == str(pattern)[2] and
+                     str(pattern)[1] == str(pattern)[3])
+
+    # Systematic scans (increasing diversity)
+    systematic = sum(freq for pattern, freq in zip(patterns, frequencies)
+                     if len(set(str(pattern))) >= 3)
+
+    total = sum(frequencies)
+    return {
+        'repetitive': (repetitive / total) * 100,
+        'back_forth': (back_forth / total) * 100,
+        'systematic': (systematic / total) * 100
+    }
+
+
+def extract_transitions(df, pattern_column, freq_column):
+    """Extract AOI-to-AOI transitions"""
+    transitions = Counter()
+    for _, row in df.iterrows():
+        pattern = str(row[pattern_column])
+        freq = row[freq_column]
+        for i in range(len(pattern) - 1):
+            transitions[(pattern[i], pattern[i + 1])] += freq
+    return transitions
+
+
+def pattern_to_readable(pattern):
+    return ' → '.join([AOI_NAMES.get(c, c) for c in str(pattern)])
+
+
+# Read pattern data (from patterncompare.py)
+def load_pattern_data():
+    """Load pattern data and perform analysis"""
+    print("Loading flight pattern data...")
+    try:
+        success_df = pd.read_csv('successpatterns.csv', encoding='utf-8')
+        fail_df = pd.read_csv('failpatterns.csv', encoding='utf-8')
+        pattern_data_available = True
+        print(f"✓ Successful pilots: {len(success_df)} patterns loaded")
+        print(f"✓ Unsuccessful pilots: {len(fail_df)} patterns loaded")
+
+        # Get column names for pattern data
+        pattern_col = 'Pattern String' if 'Pattern String' in success_df.columns else success_df.columns[0]
+        freq_col = 'Frequency' if 'Frequency' in success_df.columns else success_df.columns[1]
+
+        # Perform pattern analysis
+        success_aoi = count_aoi_occurrences(success_df, pattern_col, freq_col)
+        fail_aoi = count_aoi_occurrences(fail_df, pattern_col, freq_col)
+        success_behaviors = analyze_pattern_characteristics(success_df, pattern_col, freq_col)
+        fail_behaviors = analyze_pattern_characteristics(fail_df, pattern_col, freq_col)
+        success_trans = extract_transitions(success_df, pattern_col, freq_col)
+        fail_trans = extract_transitions(fail_df, pattern_col, freq_col)
+
+        return {
+            'available': True,
+            'success_df': success_df,
+            'fail_df': fail_df,
+            'pattern_col': pattern_col,
+            'freq_col': freq_col,
+            'success_aoi': success_aoi,
+            'fail_aoi': fail_aoi,
+            'success_behaviors': success_behaviors,
+            'fail_behaviors': fail_behaviors,
+            'success_trans': success_trans,
+            'fail_trans': fail_trans
+        }
+
+    except FileNotFoundError:
+        print("⚠ Pattern data files not found. Pattern comparison will be disabled.")
+        return {'available': False}
+
+
+# Load pattern data
+pattern_data = load_pattern_data()
 
 numeric_cols = [
     # main metrics
@@ -407,6 +522,11 @@ def create_enhanced_radar_dashboard(df):
                     gap: 8px;
                     margin-bottom: 5px;
                 }
+
+                /* Hidden elements */
+                .hidden {
+                    display: none !important;
+                }
             </style>
         </head>
         <body>
@@ -439,61 +559,90 @@ def create_enhanced_radar_dashboard(df):
                 dbc.Card([
                     dbc.CardHeader("Chart Controls", className="h5"),
                     dbc.CardBody([
-                        # Metric Selection
-                        html.Label("Select Metrics (3-8 recommended):", className="fw-bold text-light"),
-                        dcc.Dropdown(
-                            id='metrics-dropdown',
-                            options=[{'label': metrics_config[metric]['name'], 'value': metric}
-                                     for metric in metrics_config.keys()],
-                            value=default_metrics,
-                            multi=True,
-                            className="mb-3"
-                        ),
-
-                        # Normalization Toggle
+                        # Mode Selection Switch
+                        html.Label("Analysis Mode:", className="fw-bold text-light"),
                         dbc.Switch(
-                            id="normalization-toggle",
-                            label="Normalize Metrics (0-1 scale)",
-                            value=True,
-                            className="mb-3"
+                            id="mode-switch",
+                            label="Patterns Mode",
+                            value=False,  # Default to AOI DGM mode
+                            className="mb-4"
                         ),
 
-                        # Group Selection
-                        html.Label("Compare Groups:", className="fw-bold text-light"),
-                        dbc.Checklist(
-                            options=[
-                                {"label": " Successful Pilots", "value": "Successful"},
-                                {"label": " Unsuccessful Pilots", "value": "Unsuccessful"},
-                                {"label": " All Pilots Average", "value": "All"}
-                            ],
-                            value=["Successful", "Unsuccessful"],
-                            id="group-checklist",
-                            switch=True,
-                            className="mb-3"
-                        ),
+                        # AOI DGM Controls (visible by default)
+                        html.Div([
+                            # Metric Selection
+                            html.Label("Select Metrics (3-8 recommended):", className="fw-bold text-light"),
+                            dcc.Dropdown(
+                                id='metrics-dropdown',
+                                options=[{'label': metrics_config[metric]['name'], 'value': metric}
+                                         for metric in metrics_config.keys()],
+                                value=default_metrics,
+                                multi=True,
+                                className="mb-3"
+                            ),
 
-                        # Individual Pilot Selection
-                        html.Label("Add Individual Pilot:", className="fw-bold text-light"),
-                        dcc.Dropdown(
-                            id='pilot-dropdown',
-                            options=[{'label': f'Pilot {pid}', 'value': pid}
-                                     for pid in df['PID'].unique()],
-                            placeholder="Select individual pilot...",
-                            className="mb-3"
-                        ),
+                            # Normalization Toggle
+                            dbc.Switch(
+                                id="normalization-toggle",
+                                label="Normalize Metrics (0-1 scale)",
+                                value=True,
+                                className="mb-3"
+                            ),
 
-                        # Visualization Type
-                        html.Label("Visualization Type:", className="fw-bold text-light"),
-                        dcc.RadioItems(
-                            id='visualization-type',
-                            options=[
-                                {'label': ' Radar', 'value': 'radar'},
-                                {'label': ' Parallel Coordinates', 'value': 'parallel'},
-                                {'label': ' AOI Bar Chart', 'value': 'bar'}
-                            ],
-                            value='radar',
-                            className="mb-3"
-                        ),
+                            # Group Selection
+                            html.Label("Compare Groups:", className="fw-bold text-light"),
+                            dbc.Checklist(
+                                options=[
+                                    {"label": " Successful Pilots", "value": "Successful"},
+                                    {"label": " Unsuccessful Pilots", "value": "Unsuccessful"},
+                                    {"label": " All Pilots Average", "value": "All"}
+                                ],
+                                value=["Successful", "Unsuccessful"],
+                                id="group-checklist",
+                                switch=True,
+                                className="mb-3"
+                            ),
+
+                            # Individual Pilot Selection
+                            html.Label("Add Individual Pilot:", className="fw-bold text-light"),
+                            dcc.Dropdown(
+                                id='pilot-dropdown',
+                                options=[{'label': f'Pilot {pid}', 'value': pid}
+                                         for pid in df['PID'].unique()],
+                                placeholder="Select individual pilot...",
+                                className="mb-3"
+                            ),
+
+                            # Visualization Type - Main Charts
+                            html.Label("Visualization Type:", className="fw-bold text-light"),
+                            dcc.RadioItems(
+                                id='visualization-type',
+                                options=[
+                                    {'label': ' Radar', 'value': 'radar'},
+                                    {'label': ' Parallel Coordinates', 'value': 'parallel'},
+                                    {'label': ' AOI Bar Chart', 'value': 'bar'}
+                                ],
+                                value='radar',
+                                className="mb-3"
+                            ),
+                        ], id='aoi-dgm-controls'),
+
+                        # Pattern Comparison Controls (hidden by default)
+                        html.Div([
+                            html.Label("Pattern Analysis Charts:", className="fw-bold text-light"),
+                            dcc.RadioItems(
+                                id='pattern-chart-type',
+                                options=[
+                                    {'label': ' Attention Distribution Comparison',
+                                     'value': 'attention_distribution'},
+                                    {'label': ' Key Differences in AOI Focus', 'value': 'aoi_differences'},
+                                    {'label': ' Dominant Patterns - Successful', 'value': 'success_patterns'},
+                                    {'label': ' Dominant Patterns - Unsuccessful', 'value': 'fail_patterns'}
+                                ],
+                                value='attention_distribution',
+                                className="mb-3"
+                            ),
+                        ], id='pattern-controls', className='hidden'),
 
                         # Action Buttons - Only Reset button remains
                         dbc.Row([
@@ -909,7 +1058,217 @@ def create_enhanced_radar_dashboard(df):
 
         return analysis_content
 
-    # Callbacks
+    def create_attention_distribution_figure():
+        """Create Q2: Attention Distribution Comparison graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available")
+
+        aoi_labels_full = [AOI_NAMES[k] for k in AOI_NAMES.keys()]
+        success_totals = [pattern_data['success_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+        fail_totals = [pattern_data['fail_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+
+        success_total = sum(success_totals)
+        fail_total = sum(fail_totals)
+        success_pcts = [(x / success_total) * 100 for x in success_totals]
+        fail_pcts = [(x / fail_total) * 100 for x in fail_totals]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=aoi_labels_full,
+            y=success_pcts,
+            name='Successful',
+            marker_color='#2ecc71',
+            text=[f'{v:.1f}%' for v in success_pcts],
+            textposition='outside',
+            textfont=dict(size=10, color='white')
+        ))
+
+        fig.add_trace(go.Bar(
+            x=aoi_labels_full,
+            y=fail_pcts,
+            name='Unsuccessful',
+            marker_color='#e74c3c',
+            text=[f'{v:.1f}%' for v in fail_pcts],
+            textposition='outside',
+            textfont=dict(size=10, color='white')
+        ))
+
+        fig.update_layout(
+            title="<b>Q2: Attention Distribution Comparison</b>",
+            xaxis_title="Areas of Interest (AOI)",
+            yaxis_title="% of Gaze Time",
+            barmode='group',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=True,
+            legend=dict(
+                bgcolor='rgba(0,0,0,0.5)',
+                font=dict(color='white')
+            )
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+
+        return fig
+
+    def create_aoi_differences_figure():
+        """Create Q2: Key Differences in AOI Focus graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available")
+
+        aoi_labels_full = [AOI_NAMES[k] for k in AOI_NAMES.keys()]
+        success_totals = [pattern_data['success_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+        fail_totals = [pattern_data['fail_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+
+        success_total = sum(success_totals)
+        fail_total = sum(fail_totals)
+        success_pcts = [(x / success_total) * 100 for x in success_totals]
+        fail_pcts = [(x / fail_total) * 100 for x in fail_totals]
+
+        differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
+        diff_colors = ['#2ecc71' if d > 0 else '#e74c3c' for d in differences]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=aoi_labels_full,
+            y=differences,
+            marker_color=diff_colors,
+            text=[f'{d:+.1f}%' for d in differences],
+            textposition='outside',
+            textfont=dict(size=11, color='white'),
+            hovertemplate='<b>%{x}</b><br>Difference: %{y:+.1f}%<br>(Positive = more in successful)<extra></extra>'
+        ))
+
+        fig.add_shape(
+            type="line",
+            x0=-0.5, x1=len(aoi_labels_full) - 0.5,
+            y0=0, y1=0,
+            line=dict(dash="dash", color="white", width=1),
+            opacity=0.5
+        )
+
+        fig.update_layout(
+            title="<b>Q2: Key Differences in AOI Focus</b>",
+            xaxis_title="Areas of Interest (AOI)",
+            yaxis_title="Difference in % Gaze Time (Success - Fail)",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=False
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+
+        return fig
+
+    def create_success_patterns_figure():
+        """Create Q3: Dominant Patterns - Successful graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available")
+
+        top15_success = pattern_data['success_df'].nlargest(15, pattern_data['freq_col']).copy()
+        success_patterns_readable = [pattern_to_readable(p) for p in top15_success[pattern_data['pattern_col']]]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=success_patterns_readable[::-1],
+            x=top15_success[pattern_data['freq_col']].values[::-1],
+            orientation='h',
+            marker_color='#2ecc71',
+            text=top15_success[pattern_data['freq_col']].values[::-1],
+            textposition='outside',
+            textfont=dict(size=11, color='white'),
+            hovertemplate='<b>%{y}</b><br>Frequency: %{x}<extra></extra>'
+        ))
+
+        fig.update_layout(
+            title="<b>Q3: Dominant Patterns - Successful</b>",
+            xaxis_title="Frequency",
+            yaxis_title="Pattern Sequence",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=False
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+
+        return fig
+
+    def create_fail_patterns_figure():
+        """Create Q3: Dominant Patterns - Unsuccessful graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available")
+
+        top15_fail = pattern_data['fail_df'].nlargest(15, pattern_data['freq_col']).copy()
+        fail_patterns_readable = [pattern_to_readable(p) for p in top15_fail[pattern_data['pattern_col']]]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=fail_patterns_readable[::-1],
+            x=top15_fail[pattern_data['freq_col']].values[::-1],
+            orientation='h',
+            marker_color='#e74c3c',
+            text=top15_fail[pattern_data['freq_col']].values[::-1],
+            textposition='outside',
+            textfont=dict(size=11, color='white'),
+            hovertemplate='<b>%{y}</b><br>Frequency: %{x}<extra></extra>'
+        ))
+
+        fig.update_layout(
+            title="<b>Q3: Dominant Patterns - Unsuccessful</b>",
+            xaxis_title="Frequency",
+            yaxis_title="Pattern Sequence",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=False
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+
+        return fig
+
+    def create_error_figure(message):
+        """Create an error figure when pattern data is not available"""
+        fig = go.Figure()
+        fig.add_annotation(
+            text=message,
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16, color="white")
+        )
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550
+        )
+        return fig
+
+    # Callbacks for showing/hiding controls based on mode
+    @app.callback(
+        [Output('aoi-dgm-controls', 'className'),
+         Output('pattern-controls', 'className')],
+        [Input('mode-switch', 'value')]
+    )
+    def toggle_controls(mode_switch_value):
+        if mode_switch_value:  # Patterns mode
+            return 'hidden', ''
+        else:  # AOI DGM mode
+            return '', 'hidden'
+
+    # Main callback
     @app.callback(
         [Output('main-visualization', 'figure'),
          Output('behavior-characterization', 'children'),
@@ -920,11 +1279,13 @@ def create_enhanced_radar_dashboard(df):
          Input('group-checklist', 'value'),
          Input('pilot-dropdown', 'value'),
          Input('visualization-type', 'value'),
+         Input('pattern-chart-type', 'value'),
+         Input('mode-switch', 'value'),
          Input('reset-btn', 'n_clicks')],
         [State('metrics-dropdown', 'options')]
     )
-    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot, visualization_type, reset_clicks,
-                         metric_options):
+    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot, visualization_type,
+                         pattern_chart_type, mode_switch_value, reset_clicks, metric_options):
         # Handle reset button
         ctx = callback_context
         if ctx.triggered and ctx.triggered[0]['prop_id'] == 'reset-btn.n_clicks':
@@ -933,11 +1294,55 @@ def create_enhanced_radar_dashboard(df):
             selected_groups = ["Successful", "Unsuccessful"]
             selected_pilot = None
             visualization_type = 'radar'
+            pattern_chart_type = 'attention_distribution'
+            mode_switch_value = False
 
+        # Handle pattern chart types when in Patterns mode
+        if mode_switch_value:
+            if pattern_chart_type == 'attention_distribution':
+                fig = create_attention_distribution_figure()
+            elif pattern_chart_type == 'aoi_differences':
+                fig = create_aoi_differences_figure()
+            elif pattern_chart_type == 'success_patterns':
+                fig = create_success_patterns_figure()
+            elif pattern_chart_type == 'fail_patterns':
+                fig = create_fail_patterns_figure()
+            else:
+                fig = create_attention_distribution_figure()
+
+            # For pattern charts, we don't need the other analysis panels
+            behavior_characterization = []
+            success_analysis = []
+            stats_data = {}
+
+            # Add pattern insights if data is available
+            if pattern_data['available']:
+                behavior_characterization.append(html.H5("Pattern Analysis", className="text-info mb-3"))
+
+                # Add some basic insights
+                aoi_labels = list(AOI_NAMES.keys())
+                success_pcts = [(pattern_data['success_aoi'][aoi] / sum(pattern_data['success_aoi'].values())) * 100 for
+                                aoi in aoi_labels]
+                fail_pcts = [(pattern_data['fail_aoi'][aoi] / sum(pattern_data['fail_aoi'].values())) * 100 for aoi in
+                             aoi_labels]
+                differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
+                max_diff_idx = differences.index(max(differences, key=abs))
+                max_diff_aoi = AOI_NAMES[aoi_labels[max_diff_idx]]
+
+                behavior_characterization.append(html.Div([
+                    html.Strong("Key Insight:", className="text-light"),
+                    html.Br(),
+                    html.Span(f"Largest attention difference: {max_diff_aoi} ({differences[max_diff_idx]:+.1f}%)",
+                              className="text-light small")
+                ], className="pattern-metric"))
+
+            return fig, behavior_characterization, success_analysis, stats_data
+
+        # Original visualization logic for AOI DGM mode
         if not selected_metrics or len(selected_metrics) < 3:
             selected_metrics = default_metrics[:3]
 
-        # Prepare data
+        # Prepare data for other visualization types
         stats_data = {}
 
         # Normalization function
@@ -1168,6 +1573,10 @@ print("Loading data from AOI_DGMs.csv...")
 print(f"Loaded {len(df)} pilots")
 print(f"Successful: {len(df[df['pilot_success'] == 'Successful'])}")
 print(f"Unsuccessful: {len(df[df['pilot_success'] == 'Unsuccessful'])}")
+if pattern_data['available']:
+    print("✓ Pattern comparison data loaded successfully")
+else:
+    print("⚠ Pattern comparison data not available")
 print("\nDashboard will open in your web browser...")
 
 # Create the dashboard app
