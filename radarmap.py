@@ -2,10 +2,12 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 import dash
-from dash import dcc, html, Input, Output, State, callback_context
+from dash import dcc, html, Input, Output, State, callback_context, ALL
 import dash_bootstrap_components as dbc
 from collections import Counter
 from plotly.subplots import make_subplots
+from dash.exceptions import PreventUpdate
+import dash_daq as daq
 
 # Read directly from your CSV file
 df = pd.read_csv('AOI_DGMs.csv')
@@ -155,47 +157,80 @@ def create_enhanced_radar_dashboard(df):
     metrics_config = {
         'Mean_fixation_duration_s': {
             'name': 'Fixation Duration (s)',
-            'description': 'Average time eyes remain stationary. Shorter = faster information processing'
+            'description': 'Average time eyes remain stationary. Shorter = faster information processing',
+            'min': 0.1,
+            'max': 1.0,
+            'default': 0.3
         },
         'mean_saccade_length': {
             'name': 'Saccade Length (px)',
-            'description': 'Average distance between fixations. Moderate = efficient scanning'
+            'description': 'Average distance between fixations. Moderate = efficient scanning',
+            'min': 50,
+            'max': 500,
+            'default': 200
         },
         'Average_Peak_Saccade_Velocity': {
             'name': 'Saccade Velocity (deg/s)',
-            'description': 'Speed of eye movements. Higher = quicker scanning'
+            'description': 'Speed of eye movements. Higher = quicker scanning',
+            'min': 100,
+            'max': 800,
+            'default': 350
         },
         'stationary_entropy': {
             'name': 'Fixation Entropy',
-            'description': 'Randomness of fixation locations. Lower = more systematic viewing'
+            'description': 'Randomness of fixation locations. Lower = more systematic viewing',
+            'min': 0.5,
+            'max': 3.0,
+            'default': 1.5
         },
         'transition_entropy': {
             'name': 'Transition Entropy',
-            'description': 'Predictability of scanpaths. Lower = more consistent patterns'
+            'description': 'Predictability of scanpaths. Lower = more consistent patterns',
+            'min': 0.5,
+            'max': 3.0,
+            'default': 1.5
         },
         'Average_Blink_Rate_per_Minute': {
             'name': 'Blink Rate (/min)',
-            'description': 'Blinks per minute. Moderate = optimal cognitive load'
+            'description': 'Blinks per minute. Moderate = optimal cognitive load',
+            'min': 5,
+            'max': 50,
+            'default': 20
         },
         'fixation_to_saccade_ratio': {
             'name': 'Fixation/Saccade Ratio',
-            'description': 'Balance between processing and searching. Balanced = efficient'
+            'description': 'Balance between processing and searching. Balanced = efficient',
+            'min': 0.5,
+            'max': 3.0,
+            'default': 1.5
         },
         'Total_Number_of_Fixations': {
             'name': 'Total Fixations',
-            'description': 'Total number of fixations. Moderate = efficient information gathering'
+            'description': 'Total number of fixations. Moderate = efficient information gathering',
+            'min': 50,
+            'max': 500,
+            'default': 200
         },
         'Sum_of_all_fixation_duration_s': {
             'name': 'Total Fixation Time (s)',
-            'description': 'Cumulative fixation duration'
+            'description': 'Cumulative fixation duration',
+            'min': 30,
+            'max': 300,
+            'default': 120
         },
         'total_number_of_saccades': {
             'name': 'Total Saccades',
-            'description': 'Total number of eye movements between fixations'
+            'description': 'Total number of eye movements between fixations',
+            'min': 40,
+            'max': 400,
+            'default': 150
         },
         'Approach_Score': {
             'name': 'Approach Score',
-            'description': 'Overall approach performance score (0-1 scale)'
+            'description': 'Overall approach performance score (0-1 scale)',
+            'min': 0.0,
+            'max': 1.0,
+            'default': 0.7
         }
     }
 
@@ -543,6 +578,25 @@ def create_enhanced_radar_dashboard(df):
                 .hidden {
                     display: none !important;
                 }
+
+                /* Custom input styles */
+                .custom-numeric-input {
+                    background-color: #2c3e50 !important;
+                    color: white !important;
+                    border: 1px solid #34495e !important;
+                    border-radius: 4px !important;
+                }
+
+                .custom-numeric-input input {
+                    color: white !important;
+                    background-color: #2c3e50 !important;
+                }
+
+                /* Switch styling */
+                .custom-switch .form-check-input:checked {
+                    background-color: #4caf50 !important;
+                    border-color: #4caf50 !important;
+                }
             </style>
         </head>
         <body>
@@ -580,7 +634,7 @@ def create_enhanced_radar_dashboard(df):
                         dbc.Switch(
                             id="mode-switch",
                             label="Patterns Mode",
-                            value=False,  # Default to AOI DGM mode
+                            value=False,
                             className="mb-4"
                         ),
 
@@ -596,6 +650,17 @@ def create_enhanced_radar_dashboard(df):
                                 multi=True,
                                 className="mb-3"
                             ),
+
+                            # Custom Values Switch (NEW - replaces dropdown option)
+                            html.Div([
+                                html.Label("Enable Custom Values:", className="fw-bold text-light mb-2"),
+                                dbc.Switch(
+                                    id="custom-values-switch",
+                                    label="Add Custom Values to Graph",
+                                    value=False,
+                                    className="mb-3 custom-switch"
+                                ),
+                            ], className="mb-3 p-3 bg-dark rounded"),
 
                             # Group Selection
                             html.Label("Compare Groups:", className="fw-bold text-light"),
@@ -615,8 +680,12 @@ def create_enhanced_radar_dashboard(df):
                             html.Label("Add Individual Pilot:", className="fw-bold text-light"),
                             dcc.Dropdown(
                                 id='pilot-dropdown',
-                                options=[{'label': f'Pilot {pid}', 'value': pid}
-                                         for pid in df['PID'].unique()],
+                                options=[
+                                    {'label': 'All Pilots', 'value': 'All'},
+                                    *[{'label': f'Pilot {pid}', 'value': pid}
+                                      for pid in df['PID'].unique()]
+                                ],
+                                value='All',
                                 placeholder="Select individual pilot...",
                                 className="mb-3"
                             ),
@@ -673,7 +742,7 @@ def create_enhanced_radar_dashboard(df):
                 ]),
 
                 dbc.Row([
-                    # Behavior Characterization Card - will expand to full width in pattern mode
+                    # Behavior Characterization Card
                     dbc.Col([
                         dbc.Card([
                             dbc.CardHeader("Behavior Characterization", className="h5"),
@@ -681,7 +750,7 @@ def create_enhanced_radar_dashboard(df):
                         ])
                     ], width=6, id='behavior-col'),
 
-                    # Success Analysis Card - will be hidden in pattern mode
+                    # Success Analysis Card
                     dbc.Col([
                         dbc.Card([
                             dbc.CardHeader("Success Analysis", className="h5"),
@@ -692,7 +761,45 @@ def create_enhanced_radar_dashboard(df):
             ], width=9)
         ]),
 
-        # Hidden div for storing intermediate values
+        # Custom Input Modal (will pop up when switch is turned ON)
+        dbc.Modal([
+            dbc.ModalHeader(dbc.ModalTitle("Enter Custom Metric Values")),
+            dbc.ModalBody([
+                html.P("Enter values for your custom metrics. These will appear as a 'Custom' line in the graph.",
+                       className="text-light mb-4"),
+
+                # Dynamic input fields for selected metrics
+                html.Div(id='custom-input-fields', className="mb-3"),
+
+                html.Div([
+                    html.Strong("Hint:", className="text-warning me-2"),
+                    html.Span(
+                        "Use the sliders or type values directly. Values outside typical ranges will be shown in red.",
+                        className="text-light small")
+                ], className="mb-4 p-2 bg-dark rounded"),
+
+                # Option to use defaults
+                dbc.Checklist(
+                    options=[
+                        {"label": " Fill with successful pilot averages", "value": "success_avg"},
+                        {"label": " Fill with unsuccessful pilot averages", "value": "unsuccess_avg"}
+                    ],
+                    value=[],
+                    id="fill-defaults-checklist",
+                    switch=True,
+                    className="mb-3"
+                ),
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Cancel", id="cancel-custom-btn", className="me-2", color="secondary"),
+                dbc.Button("Clear All", id="clear-custom-btn", className="me-2", color="warning"),
+                dbc.Button("Apply Custom Values", id="apply-custom-btn", color="primary")
+            ])
+        ], id="custom-input-modal", size="lg", is_open=False, backdrop="static"),
+
+        # Hidden divs for storing custom values and switch state
+        dcc.Store(id='custom-values-store', data={}),
+        dcc.Store(id='custom-switch-state', data=False),
         dcc.Store(id='current-data')
     ], fluid=True, style={'backgroundColor': '#1a1a1a'})
 
@@ -712,7 +819,7 @@ def create_enhanced_radar_dashboard(df):
                     'all_range': (df[metric].min(), df[metric].max()),
                     'difference': successful_vals.mean() - unsuccessful_vals.mean(),
                     'difference_pct': ((
-                                                   successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
+                                               successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
                 }
 
         # Add Approach Score benchmarks separately
@@ -728,7 +835,7 @@ def create_enhanced_radar_dashboard(df):
                 'all_range': (df['Approach_Score'].min(), df['Approach_Score'].max()),
                 'difference': successful_scores.mean() - unsuccessful_scores.mean(),
                 'difference_pct': (
-                            (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
+                        (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
                 'threshold': 0.7  # Success threshold
             }
 
@@ -737,13 +844,21 @@ def create_enhanced_radar_dashboard(df):
     # Pre-calculate benchmarks
     benchmarks = calculate_benchmarks()
 
-    def create_linear_scale_figure(selected_metrics, selected_groups, selected_pilot):
+    def create_linear_scale_figure(selected_metrics, selected_groups, selected_pilot, custom_values=None,
+                                   custom_enabled=False):
         """Create a linear scale visualization with dots for metrics"""
 
-        # Prepare data
-        metric_names = [metrics_config[m]['name'] for m in selected_metrics]
+        # Filter out any invalid metrics
+        plot_metrics = [m for m in selected_metrics if m in metrics_config]
 
-        # Create figure
+        # If no valid metrics, use defaults
+        if not plot_metrics:
+            plot_metrics = default_metrics[:3]
+
+        # Prepare data
+        metric_names = [metrics_config[m]['name'] for m in plot_metrics]
+
+        # Create figure FIRST - before any condition checks
         fig = go.Figure()
 
         # Add metric lines and labels
@@ -754,9 +869,9 @@ def create_enhanced_radar_dashboard(df):
                 line=dict(color="rgba(255,255,255,0.3)", width=1),
             )
 
-            # Add metric name labels on the left - MOVED CLOSER but still outside the graph
+            # Add metric name labels
             fig.add_annotation(
-                x=-0.00, y=i,  # CHANGED: x from -0.05 to -0.02 to move labels closer but keep outside
+                x=-0.00, y=i,
                 text=metric_name,
                 showarrow=False,
                 xref="paper", yref="y",
@@ -768,37 +883,54 @@ def create_enhanced_radar_dashboard(df):
         group_colors = {
             'Successful': '#2ecc71',
             'Unsuccessful': '#e74c3c',
-            'All': '#3498db'
+            'All': '#3498db',
+            'Custom': '#f39c12'  # Orange for custom values
         }
 
         group_symbols = {
             'Successful': 'circle',
             'Unsuccessful': 'square',
-            'All': 'diamond'
+            'All': 'diamond',
+            'Custom': 'star'  # Star for custom values
         }
+
+        # Check if we have any data to plot
+        has_data = False
 
         # Add dots for each group
         for group in selected_groups:
             if group == 'Successful':
-                group_data = successful_df[selected_metrics].mean()
+                group_data = successful_df[plot_metrics].mean()
             elif group == 'Unsuccessful':
-                group_data = unsuccessful_df[selected_metrics].mean()
-            else:  # 'All'
-                group_data = df[selected_metrics].mean()
+                group_data = unsuccessful_df[plot_metrics].mean()
+            elif group == 'All':
+                group_data = df[plot_metrics].mean()
+            elif group == 'Custom' and custom_enabled and custom_values:
+                # Use custom values
+                group_data = pd.Series({m: custom_values.get(m, metrics_config[m]['default'])
+                                        for m in plot_metrics})
+            else:
+                continue
+
+            # If we get here, we have data to plot
+            has_data = True
 
             x_values = []
-            for metric in selected_metrics:
-                # Scale to 0-1 for visualization (using min-max scaling)
+            for metric in plot_metrics:
+                # Scale to 0-1 for visualization
                 min_val = df[metric].min()
                 max_val = df[metric].max()
                 if max_val == min_val:
                     x_values.append(0.5)
                 else:
-                    x_values.append((group_data[metric] - min_val) / (max_val - min_val))
+                    value = group_data[metric]
+                    # Clip value to reasonable range for scaling
+                    clipped_value = max(min_val, min(max_val, value))
+                    x_values.append((clipped_value - min_val) / (max_val - min_val))
 
             fig.add_trace(go.Scatter(
                 x=x_values,
-                y=list(range(len(selected_metrics))),
+                y=list(range(len(plot_metrics))),
                 mode='markers',
                 marker=dict(
                     color=group_colors[group],
@@ -806,46 +938,65 @@ def create_enhanced_radar_dashboard(df):
                     symbol=group_symbols[group],
                     line=dict(color='white', width=1)
                 ),
-                name=f'{group} Pilots (Avg)',
+                name=f'{group} {"(Custom)" if group == "Custom" else ""}',
                 hovertemplate='<b>%{text}</b><br>Value: %{customdata:.3f}<extra></extra>',
-                text=[metrics_config[m]['name'] for m in selected_metrics],
-                customdata=[group_data[m] for m in selected_metrics]
+                text=[metrics_config[m]['name'] for m in plot_metrics],
+                customdata=[group_data[m] for m in plot_metrics]
             ))
 
-        # Add individual pilot if selected
-        if selected_pilot:
-            pilot_data = df[df['PID'] == selected_pilot][selected_metrics].iloc[0]
-            pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
+        # Add individual pilot if selected and not "All"
+        if selected_pilot and selected_pilot != "All":
+            try:
+                pilot_data = df[df['PID'] == selected_pilot][plot_metrics].iloc[0]
+                pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
+                has_data = True
 
-            x_values = []
-            for metric in selected_metrics:
-                min_val = df[metric].min()
-                max_val = df[metric].max()
-                if max_val == min_val:
-                    x_values.append(0.5)
-                else:
-                    x_values.append((pilot_data[metric] - min_val) / (max_val - min_val))
+                x_values = []
+                for metric in plot_metrics:
+                    min_val = df[metric].min()
+                    max_val = df[metric].max()
+                    if max_val == min_val:
+                        x_values.append(0.5)
+                    else:
+                        x_values.append((pilot_data[metric] - min_val) / (max_val - min_val))
 
-            fig.add_trace(go.Scatter(
-                x=x_values,
-                y=list(range(len(selected_metrics))),
-                mode='markers',
-                marker=dict(
-                    color='#f39c12',
-                    size=16,
-                    symbol='star',
-                    line=dict(color='white', width=2)
-                ),
-                name=f'Pilot {selected_pilot} ({pilot_success})',
-                hovertemplate='<b>%{text}</b><br>Value: %{customdata:.3f}<extra></extra>',
-                text=[metrics_config[m]['name'] for m in selected_metrics],
-                customdata=[pilot_data[m] for m in selected_metrics]
-            ))
+                fig.add_trace(go.Scatter(
+                    x=x_values,
+                    y=list(range(len(plot_metrics))),
+                    mode='markers',
+                    marker=dict(
+                        color='#9b59b6',  # Purple for individual pilot
+                        size=16,
+                        symbol='cross',
+                        line=dict(color='white', width=2)
+                    ),
+                    name=f'Pilot {selected_pilot} ({pilot_success})',
+                    hovertemplate='<b>%{text}</b><br>Value: %{customdata:.3f}<extra></extra>',
+                    text=[metrics_config[m]['name'] for m in plot_metrics],
+                    customdata=[pilot_data[m] for m in plot_metrics]
+                ))
+            except (IndexError, KeyError):
+                # Pilot not found or data missing
+                pass
 
-        # Update layout
+        # If no data was added, add a placeholder message
+        if not has_data:
+            fig.add_annotation(
+                text="No data to display. Please select groups or a pilot.",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5,
+                showarrow=False,
+                font=dict(size=16, color="white")
+            )
+
+        # Update layout with legend positioned above the plot, moved to the left
+        title_text = "Gaze Metrics Linear Scale Visualization"
+        if custom_enabled and custom_values:
+            title_text += ""
+
         fig.update_layout(
             title=dict(
-                text="Gaze Metrics Linear Scale Visualization",
+                text=title_text,
                 font=dict(color='white', size=16),
                 x=0.5
             ),
@@ -854,14 +1005,14 @@ def create_enhanced_radar_dashboard(df):
                     text='Scaled Value (0-1)',
                     font=dict(color='white')
                 ),
-                range=[-0.05, 1.05],  # CHANGED: Slightly reduced range
+                range=[-0.05, 1.05],
                 showgrid=True,
                 gridcolor='rgba(255,255,255,0.1)',
                 zeroline=False,
                 tickfont=dict(color='white')
             ),
             yaxis=dict(
-                range=[-0.5, len(selected_metrics) - 0.5],
+                range=[-0.5, len(plot_metrics) - 0.5],
                 showgrid=False,
                 showticklabels=False,
                 zeroline=False
@@ -873,10 +1024,26 @@ def create_enhanced_radar_dashboard(df):
             showlegend=True,
             legend=dict(
                 bgcolor='rgba(0,0,0,0.5)',
-                font=dict(color='white')
+                font=dict(color='white', size=10),
+                yanchor="top",
+                y=1.15,  # Position above the plot (greater than 1)
+                xanchor="left",  # Changed from "center" to "left"
+                x=-0.2,  # Changed from 0.5 to 0.02 (moved to left)
+                orientation="h",
+                borderwidth=1,
+                bordercolor="rgba(255,255,255,0.3)"
             ),
-            margin=dict(l=130, r=50, t=80, b=50)  # CHANGED: Reduced left margin from 150 to 130
+            margin=dict(l=130, r=50, t=100, b=50)  # Increased top margin for legend
         )
+
+        # Add an invisible trace to push the legend to the top
+        fig.add_trace(go.Scatter(
+            x=[None],
+            y=[None],
+            mode='markers',
+            marker=dict(size=0),
+            showlegend=False
+        ))
 
         return fig
 
@@ -1019,7 +1186,7 @@ def create_enhanced_radar_dashboard(df):
             font=dict(color='white'),
             height=550,
             showlegend=False,
-            margin=dict(l=120, r=50, t=80, b=50)  # Increased left margin from 100 to 120 for more space
+            margin=dict(l=120, r=50, t=80, b=50)
         )
 
         fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
@@ -1062,7 +1229,7 @@ def create_enhanced_radar_dashboard(df):
             font=dict(color='white'),
             height=550,
             showlegend=False,
-            margin=dict(l=100, r=50, t=80, b=50)  # Reduced left margin since labels are shorter
+            margin=dict(l=100, r=50, t=80, b=50)
         )
 
         fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
@@ -1092,25 +1259,278 @@ def create_enhanced_radar_dashboard(df):
         )
         return fig, None
 
-    def create_parallel_coordinates_figure(selected_metrics):
-        """Create parallel coordinates plot"""
-        fig = go.Figure(data=go.Parcoords(
-            line=dict(color=df['Approach_Score'],
-                      colorscale='Viridis',
-                      showscale=True,
-                      cmin=df['Approach_Score'].min(),
-                      cmax=df['Approach_Score'].max()),
-            dimensions=[dict(range=[df[col].min(), df[col].max()],
-                             label=metrics_config[col]['name'], values=df[col])
-                        for col in selected_metrics]
-        ))
-        fig.update_layout(
-            title="Parallel Coordinates Plot",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            height=550
-        )
+    def create_parallel_coordinates_figure(selected_metrics, selected_pilot=None, custom_values=None,
+                                           custom_enabled=False):
+        """Create parallel coordinates plot with pilot filtering, highlighting, and custom values"""
+
+        # Filter out any invalid metrics
+        valid_metrics = [m for m in selected_metrics if m in metrics_config]
+
+        if not valid_metrics:
+            return go.Figure()
+
+        # Create a copy of the dataframe for all pilots
+        plot_df = df.copy()
+
+        # Prepare dimensions list for all selected metrics
+        dimensions = []
+        for col in valid_metrics:
+            dimensions.append(dict(
+                range=[plot_df[col].min(), plot_df[col].max()],
+                label=metrics_config[col]['name'],
+                values=plot_df[col]
+            ))
+
+        # Handle different scenarios
+        if selected_pilot and selected_pilot != "All":
+            # Highlight selected pilot in orange, show custom values in red
+            colors = []
+            pilot_indices = []
+
+            # Identify which rows belong to the selected pilot
+            for i in range(len(plot_df)):
+                if plot_df.iloc[i]['PID'] == selected_pilot:
+                    colors.append(0.8)  # High value for selected pilot (will be orange)
+                    pilot_indices.append(i)
+                else:
+                    colors.append(0.2)  # Low value for others (will be faded blue)
+
+            # Add custom values row if available
+            all_values = []
+            if custom_enabled and custom_values:
+                # First add all original data
+                for i in range(len(plot_df)):
+                    row_values = [plot_df.iloc[i][metric] for metric in valid_metrics]
+                    all_values.append(row_values)
+
+                # Create custom values row
+                custom_row = []
+                for metric in valid_metrics:
+                    if metric in custom_values:
+                        custom_row.append(custom_values[metric])
+                    else:
+                        # Use default if custom value not provided
+                        custom_row.append(metrics_config[metric]['default'])
+
+                # Then add custom values row
+                all_values.append(custom_row)
+                colors.append(1.0)  # Highest value for custom values (will be red)
+
+            # Create colorscale with normalized values (0 to 1)
+            colorscale = [
+                [0.0, 'rgba(30, 136, 229, 0.2)'],  # Faded blue for others (0.0-0.3)
+                [0.3, 'rgba(30, 136, 229, 0.5)'],  # Medium blue
+                [0.6, 'rgba(30, 136, 229, 0.8)'],  # Strong blue
+                [0.8, '#FF9800'],  # Orange for selected pilot
+                [0.9, '#FF9800'],  # Orange continuation
+                [1.0, '#FF0000']  # Red for custom values
+            ]
+
+            # Create the figure
+            if custom_enabled and custom_values:
+                # Use combined data with custom values
+                combined_dimensions = []
+                for idx, metric in enumerate(valid_metrics):
+                    metric_values = [row[idx] for row in all_values]
+                    combined_dimensions.append(dict(
+                        range=[min(metric_values), max(metric_values)],
+                        label=metrics_config[metric]['name'],
+                        values=metric_values
+                    ))
+
+                fig = go.Figure(data=go.Parcoords(
+                    line=dict(
+                        color=colors,
+                        colorscale=colorscale,
+                        showscale=True,
+                        cmin=0,
+                        cmax=1.0,
+                        colorbar=dict(
+                            title="Line Type",
+                            tickvals=[0.1, 0.8, 1.0],
+                            ticktext=['Other Pilots', f'Pilot {selected_pilot}', 'Custom Values'],
+                            len=0.5
+                        )
+                    ),
+                    dimensions=combined_dimensions
+                ))
+            else:
+                # Regular plot without custom values
+                fig = go.Figure(data=go.Parcoords(
+                    line=dict(
+                        color=colors,
+                        colorscale=[
+                            [0, 'rgba(30, 136, 229, 0.2)'],
+                            [0.5, 'rgba(30, 136, 229, 0.5)'],
+                            [1, '#FF9800']
+                        ],
+                        showscale=True,
+                        cmin=0,
+                        cmax=1.0,
+                        colorbar=dict(
+                            title="Line Type",
+                            tickvals=[0.25, 0.9],
+                            ticktext=['Other Pilots', f'Pilot {selected_pilot}'],
+                            len=0.5
+                        )
+                    ),
+                    dimensions=dimensions
+                ))
+
+            # Update layout
+            title_text = f"Parallel Coordinates Plot - Pilot {selected_pilot} Highlighted"
+            if custom_enabled and custom_values:
+                title_text += " with Custom Values"
+
+            fig.update_layout(
+                title=dict(
+                    text=title_text,
+                    font=dict(color='white', size=16),
+                    x=0.5
+                ),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                height=550,
+                margin=dict(l=80, r=80, t=80, b=50)
+            )
+
+            # Add annotation explaining the visualization
+            annotation_text = f"Orange line: Pilot {selected_pilot} | Faded lines: All other pilots"
+            if custom_enabled and custom_values:
+                annotation_text += " | Red line: Custom Values"
+
+            fig.add_annotation(
+                x=0.5,
+                y=-0.1,
+                xref="paper",
+                yref="paper",
+                text=annotation_text,
+                showarrow=False,
+                font=dict(color='white', size=12),
+                bgcolor="rgba(0,0,0,0.5)",
+                bordercolor="white",
+                borderwidth=1,
+                borderpad=4
+            )
+
+        else:
+            # Show all pilots with Approach Score coloring, plus custom values in red
+            if custom_enabled and custom_values:
+                # We need to create a combined dataset with custom values
+                all_values = []
+                colors = []
+
+                # Add all pilot data with Approach Score coloring
+                for i in range(len(plot_df)):
+                    row_values = [plot_df.iloc[i][metric] for metric in valid_metrics]
+                    all_values.append(row_values)
+                    colors.append(plot_df.iloc[i]['Approach_Score'] if 'Approach_Score' in plot_df.columns else 0.5)
+
+                # Create custom values row
+                custom_row = []
+                for metric in valid_metrics:
+                    if metric in custom_values:
+                        custom_row.append(custom_values[metric])
+                    else:
+                        # Use default if custom value not provided
+                        custom_row.append(metrics_config[metric]['default'])
+
+                # Add custom values row
+                all_values.append(custom_row)
+                colors.append(1.0)  # Special value for custom values (red)
+
+                # Create dimensions with combined data
+                dimensions_with_custom = []
+                for idx, metric in enumerate(valid_metrics):
+                    metric_values = [row[idx] for row in all_values]
+                    dimensions_with_custom.append(dict(
+                        range=[min(metric_values), max(metric_values)],
+                        label=metrics_config[metric]['name'],
+                        values=metric_values
+                    ))
+
+                # Normalize Approach Score values to 0-0.9 range, keep 1.0 for custom
+                max_app_score = max(c for c in colors if c < 1.0)  # Max excluding custom
+                normalized_colors = []
+                for c in colors:
+                    if c == 1.0:  # Custom value
+                        normalized_colors.append(1.0)
+                    else:  # Pilot values
+                        normalized_colors.append(c / max_app_score * 0.9)  # Scale to 0-0.9
+
+                # Create custom colorscale that includes red for custom values
+                fig = go.Figure(data=go.Parcoords(
+                    line=dict(
+                        color=normalized_colors,
+                        colorscale=[
+                            [0.0, '#440154'],  # Dark purple (low Approach Score)
+                            [0.25, '#3b528b'],  # Blue
+                            [0.5, '#21918c'],  # Teal
+                            [0.75, '#5ec962'],  # Green
+                            [0.9, '#fde725'],  # Yellow (high Approach Score)
+                            [1.0, '#FF0000']  # Red for custom values
+                        ],
+                        showscale=True,
+                        cmin=0,
+                        cmax=1.0,
+                        colorbar=dict(
+                            title="Approach Score / Custom",
+                            tickvals=[0, 0.25, 0.5, 0.75, 0.9, 1.0],
+                            ticktext=['0.0', '0.25', '0.5', '0.75', '1.0', 'Custom'],
+                            len=0.5
+                        )
+                    ),
+                    dimensions=dimensions_with_custom
+                ))
+
+                title_text = "Parallel Coordinates Plot - All Pilots with Custom Values (Red)"
+            else:
+                # Regular plot without custom values
+                fig = go.Figure(data=go.Parcoords(
+                    line=dict(
+                        color=plot_df['Approach_Score'] if 'Approach_Score' in plot_df.columns else [0.5] * len(
+                            plot_df),
+                        colorscale='Viridis',
+                        showscale=True,
+                        cmin=plot_df['Approach_Score'].min() if 'Approach_Score' in plot_df.columns else 0,
+                        cmax=plot_df['Approach_Score'].max() if 'Approach_Score' in plot_df.columns else 1
+                    ),
+                    dimensions=dimensions
+                ))
+
+                title_text = "Parallel Coordinates Plot - All Pilots"
+
+            # Update layout
+            fig.update_layout(
+                title=dict(
+                    text=title_text,
+                    font=dict(color='white', size=16),
+                    x=0.5
+                ),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white'),
+                height=550,
+                margin=dict(l=80, r=80, t=80, b=50)
+            )
+
+            # Add annotation if custom values are shown
+            if custom_enabled and custom_values:
+                fig.add_annotation(
+                    x=0.5,
+                    y=-0.1,
+                    xref="paper",
+                    yref="paper",
+                    text="Red line: Custom Values | Colored lines: Pilots (color = Approach Score)",
+                    showarrow=False,
+                    font=dict(color='white', size=12),
+                    bgcolor="rgba(0,0,0,0.5)",
+                    bordercolor="white",
+                    borderwidth=1,
+                    borderpad=4
+                )
+
         return fig
 
     def get_pattern_explanations():
@@ -1235,12 +1655,143 @@ def create_enhanced_radar_dashboard(df):
 
         return characterization_content
 
-    def analyze_success_patterns(selected_metrics, stats_data, selected_pilot=None):
+    def analyze_success_patterns(selected_metrics, stats_data, selected_pilot=None, custom_values=None,
+                                 custom_enabled=False):
         """Analyze gaze patterns to determine success/failure reasons with statistical evidence"""
 
         analysis_content = []
 
-        if selected_pilot:
+        # Check if custom values are being used
+        if custom_enabled and custom_values and 'Custom' in stats_data:
+            analysis_content.append(html.H5("Custom Values Analysis", className="text-info mb-3"))
+
+            # Status header for custom
+            status_text = "🎯 CUSTOM VALUES ANALYSIS"
+            analysis_content.append(html.Div(status_text, className="success-status"))
+
+            # Add benchmark comparison
+            analysis_content.append(html.H6("Comparison with Group Averages:", className="text-warning mt-3"))
+
+            if 'Successful' in stats_data and 'Unsuccessful' in stats_data:
+                custom_data = stats_data['Custom']
+                success_avg = stats_data['Successful']
+                unsuccess_avg = stats_data['Unsuccessful']
+
+                for metric in selected_metrics:
+                    if metric in custom_data:
+                        custom_val = custom_data[metric]
+                        success_val = success_avg.get(metric, 0)
+                        unsuccess_val = unsuccess_avg.get(metric, 0)
+
+                        # Calculate percentage differences
+                        if success_val != 0:
+                            diff_pct_success = ((custom_val - success_val) / success_val) * 100
+                        else:
+                            diff_pct_success = 0
+
+                        if unsuccess_val != 0:
+                            diff_pct_unsuccess = ((custom_val - unsuccess_val) / unsuccess_val) * 100
+                        else:
+                            diff_pct_unsuccess = 0
+
+                        # Determine if closer to successful or unsuccessful
+                        dist_from_success = abs(diff_pct_success)
+                        dist_from_unsuccess = abs(diff_pct_unsuccess)
+
+                        if dist_from_success < dist_from_unsuccess:
+                            status_class = "metric-good"
+                            comparison = f"Closer to successful average ({dist_from_success:.1f}% difference)"
+                        else:
+                            status_class = "metric-bad"
+                            comparison = f"Closer to unsuccessful average ({dist_from_unsuccess:.1f}% difference)"
+
+                        # Add Approach Score threshold check
+                        if metric == 'Approach_Score':
+                            threshold = benchmarks.get('Approach_Score', {}).get('threshold', 0.7)
+                            if custom_val >= threshold:
+                                score_status = "Above success threshold"
+                                score_class = "text-success"
+                            else:
+                                score_status = "Below success threshold"
+                                score_class = "text-danger"
+
+                            metric_item = html.Div([
+                                html.Strong(f"{metrics_config[metric]['name']}: {custom_val:.3f}",
+                                            className="text-light"),
+                                html.Br(),
+                                html.Span(f"Threshold check: {score_status}", className=f"{score_class}"),
+                                html.Br(),
+                                html.Span(f"{comparison}", className="text-light small"),
+                                html.Br(),
+                                html.Span(f"Successful average: {success_val:.3f}", className="text-success"),
+                                html.Br(),
+                                html.Span(f"Unsuccessful average: {unsuccess_val:.3f}", className="text-danger")
+                            ], className=f"metric-item {status_class}")
+                        else:
+                            metric_item = html.Div([
+                                html.Strong(f"{metrics_config[metric]['name']}: {custom_val:.3f}",
+                                            className="text-light"),
+                                html.Br(),
+                                html.Span(f"{metrics_config[metric]['description']}", className="metric-description"),
+                                html.Br(),
+                                html.Span(f"{comparison}", className="text-light small"),
+                                html.Br(),
+                                html.Span(f"Successful average: {success_val:.3f}", className="text-success"),
+                                html.Br(),
+                                html.Span(f"Unsuccessful average: {unsuccess_val:.3f}", className="text-danger")
+                            ], className=f"metric-item {status_class}")
+
+                        analysis_content.append(metric_item)
+
+                # Overall assessment
+                analysis_content.append(html.H6("Overall Assessment:", className="text-warning mt-3"))
+
+                # Count metrics closer to success vs unsuccessful
+                success_count = 0
+                unsuccess_count = 0
+
+                for metric in selected_metrics:
+                    if metric in custom_data:
+                        custom_val = custom_data[metric]
+                        success_val = success_avg.get(metric, 0)
+                        unsuccess_val = unsuccess_avg.get(metric, 0)
+
+                        if success_val != 0 and unsuccess_val != 0:
+                            dist_from_success = abs((custom_val - success_val) / success_val) * 100
+                            dist_from_unsuccess = abs((custom_val - unsuccess_val) / unsuccess_val) * 100
+
+                            if dist_from_success < dist_from_unsuccess:
+                                success_count += 1
+                            else:
+                                unsuccess_count += 1
+
+                total = success_count + unsuccess_count
+                if total > 0:
+                    success_percentage = (success_count / total) * 100
+
+                    if success_percentage >= 70:
+                        assessment = "STRONG correlation with successful pilot patterns"
+                        assessment_class = "text-success"
+                    elif success_percentage >= 50:
+                        assessment = "MODERATE correlation with successful pilot patterns"
+                        assessment_class = "text-warning"
+                    else:
+                        assessment = "WEAK correlation with successful pilot patterns"
+                        assessment_class = "text-danger"
+
+                    analysis_content.append(html.P(
+                        f"{success_count} of {total} metrics ({success_percentage:.0f}%) align more closely with successful pilots.",
+                        className="text-light small"
+                    ))
+                    analysis_content.append(html.P(
+                        f"Assessment: {assessment}",
+                        className=f"{assessment_class} font-weight-bold"
+                    ))
+
+            return analysis_content
+
+        # Check if selected_pilot is "All" or None
+        if selected_pilot and selected_pilot != "All":
             # Individual pilot analysis
             pilot_key = f'Pilot {selected_pilot}'
             if pilot_key in stats_data:
@@ -1330,9 +1881,6 @@ def create_enhanced_radar_dashboard(df):
                             diff_pct_unsuccess = 0
 
                         # Determine good/bad based on proximity to successful vs unsuccessful averages
-                        # CHANGED: Mark as bad if too close to unsuccessful average
-
-                        # First, calculate absolute distances from each average
                         dist_from_success = abs(diff_pct_success)
                         dist_from_unsuccess = abs(diff_pct_unsuccess)
 
@@ -1453,7 +2001,7 @@ def create_enhanced_radar_dashboard(df):
                                 className="text-success small mb-1"))
 
                         if close_to_unsuccess:
-                            close_names = [metrics_config[m]['name'] for m in close_to_unsuccess[:5]]  # Show first 5
+                            close_names = [metrics_config[m]['name'] for m in close_to_unsuccess[:5]]
                             analysis_content.append(html.P(
                                 f"✗ {len(close_to_unsuccess)} metrics close to unsuccessful average: {', '.join(close_names)}",
                                 className="text-danger small mb-1"))
@@ -1477,7 +2025,7 @@ def create_enhanced_radar_dashboard(df):
                         className="text-light small"))
 
         else:
-            # Group comparison analysis
+            # Group comparison analysis when "All" is selected or no pilot is selected
             analysis_content.append(html.H5("Group Performance Analysis", className="text-info mb-3"))
 
             # Add Approach Score comparison
@@ -1580,6 +2128,193 @@ def create_enhanced_radar_dashboard(df):
             # Return to normal layout (6 columns each, both visible)
             return 6, ''
 
+    # Callback to open custom input modal when switch is turned ON
+    @app.callback(
+        [Output('custom-input-modal', 'is_open'),
+         Output('custom-switch-state', 'data')],
+        [Input('custom-values-switch', 'value'),
+         Input('cancel-custom-btn', 'n_clicks'),
+         Input('apply-custom-btn', 'n_clicks'),
+         Input('clear-custom-btn', 'n_clicks')],
+        [State('custom-input-modal', 'is_open'),
+         State('custom-switch-state', 'data')],
+        prevent_initial_call=True
+    )
+    def toggle_custom_modal(switch_value, cancel_clicks, apply_clicks, clear_clicks, is_open, switch_state):
+        ctx = callback_context
+        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+
+        # If switch is turned ON, open modal
+        if trigger_id == 'custom-values-switch' and switch_value and not switch_state:
+            return True, True  # Open modal, store switch state as ON
+
+        # If switch is turned OFF, close modal
+        elif trigger_id == 'custom-values-switch' and not switch_value and switch_state:
+            return False, False  # Close modal, store switch state as OFF
+
+        # If cancel, apply, or clear buttons are clicked, close modal but keep switch ON
+        elif trigger_id in ['cancel-custom-btn', 'apply-custom-btn', 'clear-custom-btn']:
+            return False, switch_state  # Close modal, keep switch state
+
+        return is_open, switch_state
+
+    # Callback to generate custom input fields based on selected metrics
+    @app.callback(
+        Output('custom-input-fields', 'children'),
+        [Input('custom-input-modal', 'is_open'),
+         Input('fill-defaults-checklist', 'value'),
+         Input('clear-custom-btn', 'n_clicks')],
+        [State('metrics-dropdown', 'value'),
+         State('custom-values-store', 'data')],
+        prevent_initial_call=True
+    )
+    def generate_custom_fields(is_open, fill_defaults, clear_clicks, selected_metrics, stored_values):
+        # Only generate fields when modal is open
+        if not is_open:
+            raise PreventUpdate
+
+        # Clear all values if clear button was clicked
+        ctx = callback_context
+        if ctx.triggered and ctx.triggered[0]['prop_id'] == 'clear-custom-btn.n_clicks':
+            stored_values = {}
+
+        # Filter out any invalid metrics
+        plot_metrics = [m for m in selected_metrics if m in metrics_config]
+
+        if not plot_metrics:
+            return html.Div("Please select at least one metric in the dropdown above.", className="text-warning")
+
+        fields = []
+        for metric in plot_metrics:
+            config = metrics_config[metric]
+
+            # Determine initial value
+            current_value = stored_values.get(metric, config['default'])
+
+            # Override with success/unsuccess averages if requested
+            if fill_defaults:
+                if 'success_avg' in fill_defaults and 'Successful' in successful_df.columns and metric in successful_df.columns:
+                    current_value = successful_df[metric].mean()
+                elif 'unsuccess_avg' in fill_defaults and 'Unsuccessful' in unsuccessful_df.columns and metric in unsuccessful_df.columns:
+                    current_value = unsuccessful_df[metric].mean()
+
+            # Create a row with label, description, range, and input
+            field = dbc.Row([
+                dbc.Col([
+                    html.Label(f"{config['name']}", className="fw-bold text-light"),
+                    html.P(f"{config['description']}", className="text-light small mb-1"),
+                    html.Div([
+                        html.Span(f"Typical range: {config['min']:.2f} - {config['max']:.2f}",
+                                  className="text-light small"),
+                        html.Br(),
+                        html.Span(f"Dataset range: {df[metric].min():.2f} - {df[metric].max():.2f}",
+                                  className="text-light small text-muted")
+                    ])
+                ], width=6),
+                dbc.Col([
+                    daq.NumericInput(
+                        id={'type': 'custom-input', 'index': metric},
+                        value=current_value,
+                        min=config['min'],
+                        max=config['max'],
+                        size=120,
+                        className="custom-numeric-input"
+                    ),
+                    html.Div(id={'type': 'range-warning', 'index': metric}, className="mt-1")
+                ], width=6)
+            ], className="mb-3 p-3 bg-dark rounded", id={'type': 'metric-row', 'index': metric})
+
+            fields.append(field)
+
+        return fields
+
+    # Callback to show warnings for values outside typical range
+    @app.callback(
+        [Output({'type': 'range-warning', 'index': ALL}, 'children'),
+         Output({'type': 'metric-row', 'index': ALL}, 'className')],
+        [Input({'type': 'custom-input', 'index': ALL}, 'value')],
+        [State({'type': 'custom-input', 'index': ALL}, 'id')]
+    )
+    def show_range_warnings(values, ids):
+        warnings = []
+        classes = []
+
+        for value, input_id in zip(values, ids):
+            if input_id and 'index' in input_id:
+                metric = input_id['index']
+                config = metrics_config[metric]
+
+                if value is not None:
+                    # Check if value is outside typical range
+                    if value < config['min'] or value > config['max']:
+                        warning_text = f"⚠ Value outside typical range ({config['min']:.2f}-{config['max']:.2f})"
+                        warnings.append(html.Span(warning_text, className="text-warning small"))
+                        classes.append("mb-3 p-3 bg-dark rounded border border-warning")
+                    else:
+                        warnings.append(html.Span("✓ Within typical range", className="text-success small"))
+                        classes.append("mb-3 p-3 bg-dark rounded")
+                else:
+                    warnings.append(html.Span("", className="small"))
+                    classes.append("mb-3 p-3 bg-dark rounded")
+
+        return warnings, classes
+
+    # Callback to store custom values when Apply is clicked
+    @app.callback(
+        Output('custom-values-store', 'data'),
+        [Input('apply-custom-btn', 'n_clicks'),
+         Input('clear-custom-btn', 'n_clicks')],
+        [State('metrics-dropdown', 'value'),
+         State({'type': 'custom-input', 'index': ALL}, 'id'),
+         State({'type': 'custom-input', 'index': ALL}, 'value')],
+        prevent_initial_call=True
+    )
+    def store_custom_values(apply_clicks, clear_clicks, selected_metrics, input_ids, input_values):
+        ctx = callback_context
+
+        # Clear all values if clear button was clicked
+        if ctx.triggered and ctx.triggered[0]['prop_id'] == 'clear-custom-btn.n_clicks':
+            return {}
+
+        # Store values if apply button was clicked
+        custom_data = {}
+        for input_id, value in zip(input_ids, input_values):
+            if input_id and 'index' in input_id and value is not None:
+                metric = input_id['index']
+                custom_data[metric] = value
+
+        return custom_data
+
+    # Callback to update group checklist when custom values are added
+    @app.callback(
+        Output('group-checklist', 'value'),
+        [Input('custom-values-store', 'data'),
+         Input('custom-values-switch', 'value')],
+        [State('group-checklist', 'value')]
+    )
+    def update_group_checklist(custom_data, switch_value, current_values):
+        # If switch is ON and we have custom data, add 'Custom' to groups
+        if switch_value and custom_data and 'Custom' not in current_values:
+            return current_values + ['Custom']
+        # If switch is OFF or no custom data, remove 'Custom' from groups
+        elif (not switch_value or not custom_data) and 'Custom' in current_values:
+            return [v for v in current_values if v != 'Custom']
+        return current_values
+
+    # Callback to update the switch appearance based on whether we have custom values
+    @app.callback(
+        Output('custom-values-switch', 'label'),
+        [Input('custom-values-store', 'data'),
+         Input('custom-values-switch', 'value')]
+    )
+    def update_switch_label(custom_data, switch_value):
+        if custom_data and switch_value:
+            return "Custom Values Added ✓"
+        elif switch_value:
+            return "Add Custom Values to Graph"
+        else:
+            return "Add Custom Values to Graph"
+
     # Main callback
     @app.callback(
         [Output('main-visualization', 'figure'),
@@ -1592,20 +2327,25 @@ def create_enhanced_radar_dashboard(df):
          Input('visualization-type', 'value'),
          Input('pattern-chart-type', 'value'),
          Input('mode-switch', 'value'),
-         Input('reset-btn', 'n_clicks')],
+         Input('reset-btn', 'n_clicks'),
+         Input('custom-values-store', 'data'),
+         Input('custom-values-switch', 'value')],
         [State('metrics-dropdown', 'options')]
     )
     def update_dashboard(selected_metrics, selected_groups, selected_pilot, visualization_type,
-                         pattern_chart_type, mode_switch_value, reset_clicks, metric_options):
+                         pattern_chart_type, mode_switch_value, reset_clicks, custom_values,
+                         custom_switch_value, metric_options):
         # Handle reset button
         ctx = callback_context
         if ctx.triggered and ctx.triggered[0]['prop_id'] == 'reset-btn.n_clicks':
             selected_metrics = default_metrics
             selected_groups = ["Successful", "Unsuccessful"]
-            selected_pilot = None
+            selected_pilot = 'All'
             visualization_type = 'linear'
             pattern_chart_type = 'attention_distribution'
             mode_switch_value = False
+            custom_values = {}
+            custom_switch_value = False
 
         # Handle pattern chart types when in Patterns mode
         if mode_switch_value:
@@ -1624,7 +2364,7 @@ def create_enhanced_radar_dashboard(df):
 
             # For pattern charts, enhance the behavior characterization with pattern explanations
             behavior_characterization = []
-            success_analysis = []  # Keep this empty for pattern mode
+            success_analysis = []
             stats_data = {}
 
             # Add pattern insights if data is available
@@ -1688,11 +2428,9 @@ def create_enhanced_radar_dashboard(df):
                 if pattern_chart_type in ['attention_distribution', 'aoi_differences']:
                     aoi_labels = list(AOI_NAMES.keys())
                     success_pcts = [(pattern_data['success_aoi'][aoi] / sum(pattern_data['success_aoi'].values())) * 100
-                                    for
-                                    aoi in aoi_labels]
+                                    for aoi in aoi_labels]
                     fail_pcts = [(pattern_data['fail_aoi'][aoi] / sum(pattern_data['fail_aoi'].values())) * 100 for aoi
-                                 in
-                                 aoi_labels]
+                                 in aoi_labels]
                     differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
                     max_diff_idx = differences.index(max(differences, key=abs))
                     max_diff_aoi = AOI_NAMES[aoi_labels[max_diff_idx]]
@@ -1710,7 +2448,7 @@ def create_enhanced_radar_dashboard(df):
             return fig, behavior_characterization, success_analysis, stats_data
 
         # Original visualization logic for AOI DGM mode
-        if not selected_metrics or len(selected_metrics) < 3:
+        if not selected_metrics or len([m for m in selected_metrics if m in metrics_config]) < 3:
             selected_metrics = default_metrics[:3]
 
         # Prepare data for other visualization types
@@ -1718,30 +2456,66 @@ def create_enhanced_radar_dashboard(df):
 
         # Add group data to stats_data
         if "Successful" in selected_groups:
-            stats_data['Successful'] = df[df['pilot_success'] == 'Successful'][selected_metrics].mean().to_dict()
+            valid_metrics = [m for m in selected_metrics if m in metrics_config]
+            stats_data['Successful'] = df[df['pilot_success'] == 'Successful'][
+                valid_metrics
+            ].mean().to_dict()
 
         if "Unsuccessful" in selected_groups:
-            stats_data['Unsuccessful'] = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean().to_dict()
+            valid_metrics = [m for m in selected_metrics if m in metrics_config]
+            stats_data['Unsuccessful'] = df[df['pilot_success'] == 'Unsuccessful'][
+                valid_metrics
+            ].mean().to_dict()
 
         if "All" in selected_groups:
-            stats_data['All'] = df[selected_metrics].mean().to_dict()
+            valid_metrics = [m for m in selected_metrics if m in metrics_config]
+            stats_data['All'] = df[valid_metrics].mean().to_dict()
 
-        # Add individual pilot data if selected
-        if selected_pilot:
-            stats_data[f'Pilot {selected_pilot}'] = df[df['PID'] == selected_pilot][selected_metrics].iloc[0].to_dict()
+        # Add custom values if selected and switch is ON
+        if "Custom" in selected_groups and custom_switch_value and custom_values:
+            stats_data['Custom'] = custom_values
+
+        # Add individual pilot data if selected (and not "All")
+        if selected_pilot and selected_pilot != "All":
+            valid_metrics = [m for m in selected_metrics if m in metrics_config]
+            stats_data[f'Pilot {selected_pilot}'] = df[df['PID'] == selected_pilot][
+                valid_metrics
+            ].iloc[0].to_dict()
 
         # Create visualization based on selected type
         if visualization_type == 'parallel':
-            fig = create_parallel_coordinates_figure(selected_metrics)
+            # For parallel coordinates, now support custom values
+            fig = create_parallel_coordinates_figure(
+                [m for m in selected_metrics if m in metrics_config],
+                selected_pilot,
+                custom_values,
+                custom_switch_value
+            )
         else:
-            # Default to linear scale visualization
-            fig = create_linear_scale_figure(selected_metrics, selected_groups, selected_pilot)
+            # Linear scale visualization with custom values
+            fig = create_linear_scale_figure(
+                selected_metrics,
+                selected_groups,
+                selected_pilot,
+                custom_values,
+                custom_switch_value
+            )
 
-        # Create behavior characterization (only for group comparisons)
-        behavior_characterization = characterize_behavior(selected_metrics, stats_data)
+        # Create behavior characterization
+        valid_selected_metrics = [m for m in selected_metrics if m in metrics_config]
+        behavior_characterization = characterize_behavior(
+            valid_selected_metrics,
+            stats_data
+        )
 
-        # Create success analysis (unchanged)
-        success_analysis = analyze_success_patterns(selected_metrics, stats_data, selected_pilot)
+        # Create success analysis with custom values support
+        success_analysis = analyze_success_patterns(
+            valid_selected_metrics,
+            stats_data,
+            selected_pilot,
+            custom_values,
+            custom_switch_value
+        )
 
         return fig, behavior_characterization, success_analysis, stats_data
 
