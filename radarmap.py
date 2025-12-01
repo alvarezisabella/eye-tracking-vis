@@ -58,7 +58,7 @@ def analyze_pattern_characteristics(df, pattern_column, freq_column):
     total = sum(frequencies)
     return {
         'repetitive': (repetitive / total) * 100,
-        'back_forth': (back_forth / total) * 100,
+        'back_and_forth': (back_forth / total) * 100,
         'systematic': (systematic / total) * 100
     }
 
@@ -148,7 +148,7 @@ for col in numeric_cols:
 
 def create_enhanced_radar_dashboard(df):
     """
-    Create an enhanced 3D radar chart dashboard with data-driven success/failure analysis
+    Create a dashboard with linear scale visualization showing metrics as dots along a line
     """
 
     # Available metrics with descriptions
@@ -192,42 +192,10 @@ def create_enhanced_radar_dashboard(df):
         'total_number_of_saccades': {
             'name': 'Total Saccades',
             'description': 'Total number of eye movements between fixations'
-        }
-    }
-
-    # Available metrics for bar chart
-    bar_config = {
-        'Window_Mean_fixation_duration_s': {
-            'name': 'Window',
-            'description': 'Average time spent looking at window',
         },
-        'AI_Mean_fixation_duration_s': {
-            'name': 'AI',
-            'description': 'Average time spent looking at AI',
-        },
-        'Alt_VSI_Mean_fixation_duration_s': {
-            'name': 'Alt VSI',
-            'description': 'Average time spent looking at ALT',
-        },
-        'ASI_Mean_fixation_duration_s': {
-            'name': 'ASI',
-            'description': 'Average time spent looking at ASI',
-        },
-        'TI_HSI_Mean_fixation_duration_s': {
-            'name': 'TI HSI',
-            'description': 'Average time spent looking at TI',
-        },
-        'SSI_Mean_fixation_duration_s': {
-            'name': 'SSI',
-            'description': 'Average time spent looking at SSI',
-        },
-        'RPM_Mean_fixation_duration_s': {
-            'name': 'RPM',
-            'description': 'Average time spent looking at RPM',
-        },
-        'NoAOI_Mean_fixation_duration_s': {
-            'name': 'NoAOI',
-            'description': 'Average time spent looking at NoAOI',
+        'Approach_Score': {
+            'name': 'Approach Score',
+            'description': 'Overall approach performance score (0-1 scale)'
         }
     }
 
@@ -263,7 +231,7 @@ def create_enhanced_radar_dashboard(df):
     default_metrics = [
         'Mean_fixation_duration_s', 'mean_saccade_length', 'Average_Peak_Saccade_Velocity',
         'stationary_entropy', 'transition_entropy', 'Average_Blink_Rate_per_Minute',
-        'fixation_to_saccade_ratio'
+        'fixation_to_saccade_ratio', 'Approach_Score'
     ]
 
     # Initialize Dash app with custom CSS for dropdowns
@@ -523,6 +491,63 @@ def create_enhanced_radar_dashboard(df):
                     margin-bottom: 5px;
                 }
 
+                /* Pattern explanation styles */
+                .pattern-explanation {
+                    background: rgba(255,255,255,0.08);
+                    padding: 8px;
+                    border-radius: 4px;
+                    margin: 5px 0;
+                    border-left: 3px solid #666;
+                }
+
+                .pattern-key {
+                    font-weight: bold;
+                    color: #42a5f5;
+                    margin-right: 5px;
+                }
+
+                .pattern-meaning {
+                    font-size: 0.85em;
+                    color: #cccccc;
+                }
+
+                .pattern-list {
+                    background: rgba(255,255,255,0.05);
+                    padding: 8px;
+                    border-radius: 4px;
+                    margin: 5px 0;
+                }
+
+                .pattern-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 4px 0;
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                }
+
+                .pattern-item:last-child {
+                    border-bottom: none;
+                }
+
+                .pattern-number {
+                    font-weight: bold;
+                    color: #42a5f5;
+                    min-width: 30px;
+                }
+
+                .pattern-description {
+                    flex-grow: 1;
+                    font-size: 0.9em;
+                }
+
+                .pattern-frequency {
+                    font-family: monospace;
+                    color: #cccccc;
+                    min-width: 60px;
+                    text-align: right;
+                }
+
                 /* Hidden elements */
                 .hidden {
                     display: none !important;
@@ -547,7 +572,7 @@ def create_enhanced_radar_dashboard(df):
                 html.H1("Pilot Gaze Behavior Analysis Dashboard",
                         className="text-center mb-4",
                         style={'color': '#ffffff'}),
-                html.P("Interactive 3D Radar Chart Comparing Successful vs Unsuccessful ILS Approaches",
+                html.P("Linear Scale Visualization Showing Metrics as Dots",
                        className="text-center text-light mb-4")
             ])
         ]),
@@ -581,14 +606,6 @@ def create_enhanced_radar_dashboard(df):
                                 className="mb-3"
                             ),
 
-                            # Normalization Toggle
-                            dbc.Switch(
-                                id="normalization-toggle",
-                                label="Normalize Metrics (0-1 scale)",
-                                value=True,
-                                className="mb-3"
-                            ),
-
                             # Group Selection
                             html.Label("Compare Groups:", className="fw-bold text-light"),
                             dbc.Checklist(
@@ -618,11 +635,10 @@ def create_enhanced_radar_dashboard(df):
                             dcc.RadioItems(
                                 id='visualization-type',
                                 options=[
-                                    {'label': ' Radar', 'value': 'radar'},
-                                    {'label': ' Parallel Coordinates', 'value': 'parallel'},
-                                    {'label': ' AOI Bar Chart', 'value': 'bar'}
+                                    {'label': ' Linear Scale', 'value': 'linear'},
+                                    {'label': ' Parallel Coordinates', 'value': 'parallel'}
                                 ],
-                                value='radar',
+                                value='linear',
                                 className="mb-3"
                             ),
                         ], id='aoi-dgm-controls'),
@@ -644,7 +660,7 @@ def create_enhanced_radar_dashboard(df):
                             ),
                         ], id='pattern-controls', className='hidden'),
 
-                        # Action Buttons - Only Reset button remains
+                        # Action Buttons
                         dbc.Row([
                             dbc.Col(dbc.Button("Reset Filters", id="reset-btn", color="secondary"), width=12)
                         ])
@@ -666,22 +682,22 @@ def create_enhanced_radar_dashboard(df):
                 ]),
 
                 dbc.Row([
-                    # Behavior Characterization Card (Replaced Key Statistics)
+                    # Behavior Characterization Card - will expand to full width in pattern mode
                     dbc.Col([
                         dbc.Card([
                             dbc.CardHeader("Behavior Characterization", className="h5"),
                             dbc.CardBody(id='behavior-characterization')
                         ])
-                    ], width=6),
+                    ], width=6, id='behavior-col'),
 
-                    # Success Analysis Card
+                    # Success Analysis Card - will be hidden in pattern mode
                     dbc.Col([
                         dbc.Card([
                             dbc.CardHeader("Success Analysis", className="h5"),
                             dbc.CardBody(id='success-analysis')
                         ])
-                    ], width=6)
-                ], className="mt-3")
+                    ], width=6, id='success-col')
+                ], className="mt-3", id='analysis-row')
             ], width=9)
         ]),
 
@@ -705,8 +721,7 @@ def create_enhanced_radar_dashboard(df):
                     'unsuccess_median': unsuccessful_vals.median(),
                     'all_range': (df[metric].min(), df[metric].max()),
                     'difference': successful_vals.mean() - unsuccessful_vals.mean(),
-                    'difference_pct': ((
-                                               successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
+                    'difference_pct': ((successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
                 }
 
         # Add Approach Score benchmarks separately
@@ -722,8 +737,7 @@ def create_enhanced_radar_dashboard(df):
                 'unsuccess_median': unsuccessful_scores.median(),
                 'all_range': (df['Approach_Score'].min(), df['Approach_Score'].max()),
                 'difference': successful_scores.mean() - unsuccessful_scores.mean(),
-                'difference_pct': (
-                        (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
+                'difference_pct': ((successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
                 'threshold': 0.7  # Success threshold
             }
 
@@ -731,6 +745,418 @@ def create_enhanced_radar_dashboard(df):
 
     # Pre-calculate benchmarks
     benchmarks = calculate_benchmarks()
+
+    def create_linear_scale_figure(selected_metrics, selected_groups, selected_pilot):
+        """Create a linear scale visualization with dots for metrics"""
+
+        # Prepare data
+        metric_names = [metrics_config[m]['name'] for m in selected_metrics]
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add metric lines and labels
+        for i, metric_name in enumerate(metric_names):
+            fig.add_shape(
+                type="line",
+                x0=0, x1=1, y0=i, y1=i,
+                line=dict(color="rgba(255,255,255,0.3)", width=1),
+            )
+
+            # Add metric name labels on the left - MOVED CLOSER but still outside the graph
+            fig.add_annotation(
+                x=-0.00, y=i,  # CHANGED: x from -0.05 to -0.02 to move labels closer but keep outside
+                text=metric_name,
+                showarrow=False,
+                xref="paper", yref="y",
+                xanchor="right",
+                font=dict(color="white", size=10)
+            )
+
+        # Add group data
+        group_colors = {
+            'Successful': '#2ecc71',
+            'Unsuccessful': '#e74c3c',
+            'All': '#3498db'
+        }
+
+        group_symbols = {
+            'Successful': 'circle',
+            'Unsuccessful': 'square',
+            'All': 'diamond'
+        }
+
+        # Add dots for each group
+        for group in selected_groups:
+            if group == 'Successful':
+                group_data = successful_df[selected_metrics].mean()
+            elif group == 'Unsuccessful':
+                group_data = unsuccessful_df[selected_metrics].mean()
+            else:  # 'All'
+                group_data = df[selected_metrics].mean()
+
+            x_values = []
+            for metric in selected_metrics:
+                # Scale to 0-1 for visualization (using min-max scaling)
+                min_val = df[metric].min()
+                max_val = df[metric].max()
+                if max_val == min_val:
+                    x_values.append(0.5)
+                else:
+                    x_values.append((group_data[metric] - min_val) / (max_val - min_val))
+
+            fig.add_trace(go.Scatter(
+                x=x_values,
+                y=list(range(len(selected_metrics))),
+                mode='markers',
+                marker=dict(
+                    color=group_colors[group],
+                    size=12,
+                    symbol=group_symbols[group],
+                    line=dict(color='white', width=1)
+                ),
+                name=f'{group} Pilots (Avg)',
+                hovertemplate='<b>%{text}</b><br>Value: %{customdata:.3f}<extra></extra>',
+                text=[metrics_config[m]['name'] for m in selected_metrics],
+                customdata=[group_data[m] for m in selected_metrics]
+            ))
+
+        # Add individual pilot if selected
+        if selected_pilot:
+            pilot_data = df[df['PID'] == selected_pilot][selected_metrics].iloc[0]
+            pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
+
+            x_values = []
+            for metric in selected_metrics:
+                min_val = df[metric].min()
+                max_val = df[metric].max()
+                if max_val == min_val:
+                    x_values.append(0.5)
+                else:
+                    x_values.append((pilot_data[metric] - min_val) / (max_val - min_val))
+
+            fig.add_trace(go.Scatter(
+                x=x_values,
+                y=list(range(len(selected_metrics))),
+                mode='markers',
+                marker=dict(
+                    color='#f39c12',
+                    size=16,
+                    symbol='star',
+                    line=dict(color='white', width=2)
+                ),
+                name=f'Pilot {selected_pilot} ({pilot_success})',
+                hovertemplate='<b>%{text}</b><br>Value: %{customdata:.3f}<extra></extra>',
+                text=[metrics_config[m]['name'] for m in selected_metrics],
+                customdata=[pilot_data[m] for m in selected_metrics]
+            ))
+
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text="Gaze Metrics Linear Scale Visualization",
+                font=dict(color='white', size=16),
+                x=0.5
+            ),
+            xaxis=dict(
+                title=dict(
+                    text='Scaled Value (0-1)',
+                    font=dict(color='white')
+                ),
+                range=[-0.05, 1.05],  # CHANGED: Slightly reduced range
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.1)',
+                zeroline=False,
+                tickfont=dict(color='white')
+            ),
+            yaxis=dict(
+                range=[-0.5, len(selected_metrics) - 0.5],
+                showgrid=False,
+                showticklabels=False,
+                zeroline=False
+            ),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=True,
+            legend=dict(
+                bgcolor='rgba(0,0,0,0.5)',
+                font=dict(color='white')
+            ),
+            margin=dict(l=130, r=50, t=80, b=50)  # CHANGED: Reduced left margin from 150 to 130
+        )
+
+        return fig
+
+    def create_attention_distribution_figure():
+        """Create Attention Distribution Comparison graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available")
+
+        aoi_labels_full = [AOI_NAMES[k] for k in AOI_NAMES.keys()]
+        success_totals = [pattern_data['success_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+        fail_totals = [pattern_data['fail_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+
+        success_total = sum(success_totals)
+        fail_total = sum(fail_totals)
+        success_pcts = [(x / success_total) * 100 for x in success_totals]
+        fail_pcts = [(x / fail_total) * 100 for x in fail_totals]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=aoi_labels_full,
+            y=success_pcts,
+            name='Successful',
+            marker_color='#2ecc71',
+            text=[f'{v:.1f}%' for v in success_pcts],
+            textposition='outside',
+            textfont=dict(size=10, color='white')
+        ))
+
+        fig.add_trace(go.Bar(
+            x=aoi_labels_full,
+            y=fail_pcts,
+            name='Unsuccessful',
+            marker_color='#e74c3c',
+            text=[f'{v:.1f}%' for v in fail_pcts],
+            textposition='outside',
+            textfont=dict(size=10, color='white')
+        ))
+
+        fig.update_layout(
+            title="<b>Attention Distribution Comparison</b>",
+            xaxis_title="Areas of Interest (AOI)",
+            yaxis_title="% of Gaze Time",
+            barmode='group',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=True,
+            legend=dict(
+                bgcolor='rgba(0,0,0,0.5)',
+                font=dict(color='white')
+            )
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+
+        return fig
+
+    def create_aoi_differences_figure():
+        """Create Key Differences in AOI Focus graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available")
+
+        aoi_labels_full = [AOI_NAMES[k] for k in AOI_NAMES.keys()]
+        success_totals = [pattern_data['success_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+        fail_totals = [pattern_data['fail_aoi'][aoi] for aoi in AOI_NAMES.keys()]
+
+        success_total = sum(success_totals)
+        fail_total = sum(fail_totals)
+        success_pcts = [(x / success_total) * 100 for x in success_totals]
+        fail_pcts = [(x / fail_total) * 100 for x in fail_totals]
+
+        differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
+        diff_colors = ['#2ecc71' if d > 0 else '#e74c3c' for d in differences]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=aoi_labels_full,
+            y=differences,
+            marker_color=diff_colors,
+            text=[f'{d:+.1f}%' for d in differences],
+            textposition='outside',
+            textfont=dict(size=11, color='white'),
+            hovertemplate='<b>%{x}</b><br>Difference: %{y:+.1f}%<br>(Positive = more in successful)<extra></extra>'
+        ))
+
+        fig.add_shape(
+            type="line",
+            x0=-0.5, x1=len(aoi_labels_full) - 0.5,
+            y0=0, y1=0,
+            line=dict(dash="dash", color="white", width=1),
+            opacity=0.5
+        )
+
+        fig.update_layout(
+            title="<b>Key Differences in AOI Focus</b>",
+            xaxis_title="Areas of Interest (AOI)",
+            yaxis_title="Difference in % Gaze Time (Success - Fail)",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=False
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+
+        return fig
+
+    def create_success_patterns_figure():
+        """Create Dominant Patterns - Successful graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available"), None
+
+        top15_success = pattern_data['success_df'].nlargest(15, pattern_data['freq_col']).copy()
+
+        # Use numbers for y-axis labels instead of pattern strings
+        pattern_numbers = [f"Pattern {i + 1}" for i in range(len(top15_success))]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=pattern_numbers[::-1],  # Reverse to show Pattern 1 at top
+            x=top15_success[pattern_data['freq_col']].values[::-1],
+            orientation='h',
+            marker_color='#2ecc71',
+            text=top15_success[pattern_data['freq_col']].values[::-1],
+            textposition='outside',
+            textfont=dict(size=11, color='white'),
+            hovertemplate='<b>%{y}</b><br>Frequency: %{x}<extra></extra>'
+        ))
+
+        fig.update_layout(
+            title="<b>Dominant Patterns - Successful</b>",
+            xaxis_title="Frequency",
+            yaxis_title="Pattern Sequence",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=False,
+            margin=dict(l=120, r=50, t=80, b=50)  # Increased left margin from 100 to 120 for more space
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(
+            tickfont=dict(color='white', size=10),
+            gridcolor='rgba(255,255,255,0.1)',
+            automargin=True
+        )
+
+        return fig, top15_success
+
+    def create_fail_patterns_figure():
+        """Create Dominant Patterns - Unsuccessful graph"""
+        if not pattern_data['available']:
+            return create_error_figure("Pattern data not available"), None
+
+        top15_fail = pattern_data['fail_df'].nlargest(15, pattern_data['freq_col']).copy()
+
+        # Use numbers for y-axis labels instead of pattern strings
+        pattern_numbers = [f"Pattern {i + 1}" for i in range(len(top15_fail))]
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=pattern_numbers[::-1],  # Reverse to show Pattern 1 at top
+            x=top15_fail[pattern_data['freq_col']].values[::-1],
+            orientation='h',
+            marker_color='#e74c3c',
+            text=top15_fail[pattern_data['freq_col']].values[::-1],
+            textposition='outside',
+            textfont=dict(size=11, color='white'),
+            hovertemplate='<b>%{y}</b><br>Frequency: %{x}<extra></extra>'
+        ))
+
+        fig.update_layout(
+            title="<b>Dominant Patterns - Unsuccessful</b>",
+            xaxis_title="Frequency",
+            yaxis_title="Pattern Sequence",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550,
+            showlegend=False,
+            margin=dict(l=100, r=50, t=80, b=50)  # Reduced left margin since labels are shorter
+        )
+
+        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
+        fig.update_yaxes(
+            tickfont=dict(color='white', size=10),
+            gridcolor='rgba(255,255,255,0.1)',
+            automargin=True
+        )
+
+        return fig, top15_fail
+
+    def create_error_figure(message):
+        """Create an error figure when pattern data is not available"""
+        fig = go.Figure()
+        fig.add_annotation(
+            text=message,
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16, color="white")
+        )
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550
+        )
+        return fig, None
+
+    def create_parallel_coordinates_figure(selected_metrics):
+        """Create parallel coordinates plot"""
+        fig = go.Figure(data=go.Parcoords(
+            line=dict(color=df['Approach_Score'],
+                      colorscale='Viridis',
+                      showscale=True,
+                      cmin=df['Approach_Score'].min(),
+                      cmax=df['Approach_Score'].max()),
+            dimensions=[dict(range=[df[col].min(), df[col].max()],
+                             label=metrics_config[col]['name'], values=df[col])
+                        for col in selected_metrics]
+        ))
+        fig.update_layout(
+            title="Parallel Coordinates Plot",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=550
+        )
+        return fig
+
+    def get_pattern_explanations():
+        """Return explanations for common pattern types"""
+        explanations = {
+            "Repetitive Patterns": "Single instrument focus - may indicate fixation or tunnel vision",
+            "Back-and-Forth Patterns": "Systematic switching between 2-3 key instruments - shows good cross-checking",
+            "Complex Patterns": "Multi-instrument scanning - indicates comprehensive situational awareness",
+            "Window-Focused": "High external focus - may indicate visual flight reliance",
+            "Instrument-Focused": "High panel focus - shows systematic instrument scanning",
+            "Att→Alt→Turn": "Core flight parameter monitoring - fundamental attitude and navigation tracking",
+            "Speed→RPM→ASI": "Power and performance monitoring - important for approach management"
+        }
+        return explanations
+
+    def create_pattern_list_content(pattern_df, title, success=True):
+        """Create pattern list content for the Behavior Characterization box"""
+        content = []
+
+        if pattern_df is not None and len(pattern_df) > 0:
+            # Get the actual column names from the pattern data
+            pattern_col = pattern_data['pattern_col']
+            freq_col = pattern_data['freq_col']
+
+            content.append(html.Div([
+                html.Div(f"📋 {title}", className="pattern-header"),
+                html.Div([
+                    html.Div([
+                        html.Span(f"Pattern {i + 1}: ", className="pattern-number"),
+                        html.Span(pattern_to_readable(row[pattern_col]), className="pattern-description"),
+                        html.Span(f"Freq: {row[freq_col]}", className="pattern-frequency")
+                    ], className="pattern-item")
+                    for i, (_, row) in enumerate(pattern_df.iterrows())
+                ], className="pattern-list")
+            ], className="behavior-pattern success-pattern" if success else "behavior-pattern failure-pattern"))
+
+        return content
 
     def characterize_behavior(selected_metrics, stats_data):
         """Characterize what ALL successful pilots did differently compared to ALL unsuccessful pilots"""
@@ -1058,204 +1484,6 @@ def create_enhanced_radar_dashboard(df):
 
         return analysis_content
 
-    def create_attention_distribution_figure():
-        """Create Q2: Attention Distribution Comparison graph"""
-        if not pattern_data['available']:
-            return create_error_figure("Pattern data not available")
-
-        aoi_labels_full = [AOI_NAMES[k] for k in AOI_NAMES.keys()]
-        success_totals = [pattern_data['success_aoi'][aoi] for aoi in AOI_NAMES.keys()]
-        fail_totals = [pattern_data['fail_aoi'][aoi] for aoi in AOI_NAMES.keys()]
-
-        success_total = sum(success_totals)
-        fail_total = sum(fail_totals)
-        success_pcts = [(x / success_total) * 100 for x in success_totals]
-        fail_pcts = [(x / fail_total) * 100 for x in fail_totals]
-
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=aoi_labels_full,
-            y=success_pcts,
-            name='Successful',
-            marker_color='#2ecc71',
-            text=[f'{v:.1f}%' for v in success_pcts],
-            textposition='outside',
-            textfont=dict(size=10, color='white')
-        ))
-
-        fig.add_trace(go.Bar(
-            x=aoi_labels_full,
-            y=fail_pcts,
-            name='Unsuccessful',
-            marker_color='#e74c3c',
-            text=[f'{v:.1f}%' for v in fail_pcts],
-            textposition='outside',
-            textfont=dict(size=10, color='white')
-        ))
-
-        fig.update_layout(
-            title="<b>Q2: Attention Distribution Comparison</b>",
-            xaxis_title="Areas of Interest (AOI)",
-            yaxis_title="% of Gaze Time",
-            barmode='group',
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            height=550,
-            showlegend=True,
-            legend=dict(
-                bgcolor='rgba(0,0,0,0.5)',
-                font=dict(color='white')
-            )
-        )
-
-        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-
-        return fig
-
-    def create_aoi_differences_figure():
-        """Create Q2: Key Differences in AOI Focus graph"""
-        if not pattern_data['available']:
-            return create_error_figure("Pattern data not available")
-
-        aoi_labels_full = [AOI_NAMES[k] for k in AOI_NAMES.keys()]
-        success_totals = [pattern_data['success_aoi'][aoi] for aoi in AOI_NAMES.keys()]
-        fail_totals = [pattern_data['fail_aoi'][aoi] for aoi in AOI_NAMES.keys()]
-
-        success_total = sum(success_totals)
-        fail_total = sum(fail_totals)
-        success_pcts = [(x / success_total) * 100 for x in success_totals]
-        fail_pcts = [(x / fail_total) * 100 for x in fail_totals]
-
-        differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
-        diff_colors = ['#2ecc71' if d > 0 else '#e74c3c' for d in differences]
-
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=aoi_labels_full,
-            y=differences,
-            marker_color=diff_colors,
-            text=[f'{d:+.1f}%' for d in differences],
-            textposition='outside',
-            textfont=dict(size=11, color='white'),
-            hovertemplate='<b>%{x}</b><br>Difference: %{y:+.1f}%<br>(Positive = more in successful)<extra></extra>'
-        ))
-
-        fig.add_shape(
-            type="line",
-            x0=-0.5, x1=len(aoi_labels_full) - 0.5,
-            y0=0, y1=0,
-            line=dict(dash="dash", color="white", width=1),
-            opacity=0.5
-        )
-
-        fig.update_layout(
-            title="<b>Q2: Key Differences in AOI Focus</b>",
-            xaxis_title="Areas of Interest (AOI)",
-            yaxis_title="Difference in % Gaze Time (Success - Fail)",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            height=550,
-            showlegend=False
-        )
-
-        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-
-        return fig
-
-    def create_success_patterns_figure():
-        """Create Q3: Dominant Patterns - Successful graph"""
-        if not pattern_data['available']:
-            return create_error_figure("Pattern data not available")
-
-        top15_success = pattern_data['success_df'].nlargest(15, pattern_data['freq_col']).copy()
-        success_patterns_readable = [pattern_to_readable(p) for p in top15_success[pattern_data['pattern_col']]]
-
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            y=success_patterns_readable[::-1],
-            x=top15_success[pattern_data['freq_col']].values[::-1],
-            orientation='h',
-            marker_color='#2ecc71',
-            text=top15_success[pattern_data['freq_col']].values[::-1],
-            textposition='outside',
-            textfont=dict(size=11, color='white'),
-            hovertemplate='<b>%{y}</b><br>Frequency: %{x}<extra></extra>'
-        ))
-
-        fig.update_layout(
-            title="<b>Q3: Dominant Patterns - Successful</b>",
-            xaxis_title="Frequency",
-            yaxis_title="Pattern Sequence",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            height=550,
-            showlegend=False
-        )
-
-        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-
-        return fig
-
-    def create_fail_patterns_figure():
-        """Create Q3: Dominant Patterns - Unsuccessful graph"""
-        if not pattern_data['available']:
-            return create_error_figure("Pattern data not available")
-
-        top15_fail = pattern_data['fail_df'].nlargest(15, pattern_data['freq_col']).copy()
-        fail_patterns_readable = [pattern_to_readable(p) for p in top15_fail[pattern_data['pattern_col']]]
-
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            y=fail_patterns_readable[::-1],
-            x=top15_fail[pattern_data['freq_col']].values[::-1],
-            orientation='h',
-            marker_color='#e74c3c',
-            text=top15_fail[pattern_data['freq_col']].values[::-1],
-            textposition='outside',
-            textfont=dict(size=11, color='white'),
-            hovertemplate='<b>%{y}</b><br>Frequency: %{x}<extra></extra>'
-        ))
-
-        fig.update_layout(
-            title="<b>Q3: Dominant Patterns - Unsuccessful</b>",
-            xaxis_title="Frequency",
-            yaxis_title="Pattern Sequence",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            height=550,
-            showlegend=False
-        )
-
-        fig.update_xaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-        fig.update_yaxes(tickfont=dict(color='white'), gridcolor='rgba(255,255,255,0.1)')
-
-        return fig
-
-    def create_error_figure(message):
-        """Create an error figure when pattern data is not available"""
-        fig = go.Figure()
-        fig.add_annotation(
-            text=message,
-            xref="paper", yref="paper",
-            x=0.5, y=0.5,
-            showarrow=False,
-            font=dict(size=16, color="white")
-        )
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            height=550
-        )
-        return fig
-
     # Callbacks for showing/hiding controls based on mode
     @app.callback(
         [Output('aoi-dgm-controls', 'className'),
@@ -1268,6 +1496,20 @@ def create_enhanced_radar_dashboard(df):
         else:  # AOI DGM mode
             return '', 'hidden'
 
+    # Callback for layout changes in pattern mode
+    @app.callback(
+        [Output('behavior-col', 'width'),
+         Output('success-col', 'className')],
+        [Input('mode-switch', 'value')]
+    )
+    def update_layout_for_pattern_mode(mode_switch_value):
+        if mode_switch_value:  # Patterns mode
+            # Expand behavior characterization to full width, hide success analysis
+            return 12, 'hidden'
+        else:  # AOI DGM mode
+            # Return to normal layout (6 columns each, both visible)
+            return 6, ''
+
     # Main callback
     @app.callback(
         [Output('main-visualization', 'figure'),
@@ -1275,7 +1517,6 @@ def create_enhanced_radar_dashboard(df):
          Output('success-analysis', 'children'),
          Output('current-data', 'data')],
         [Input('metrics-dropdown', 'value'),
-         Input('normalization-toggle', 'value'),
          Input('group-checklist', 'value'),
          Input('pilot-dropdown', 'value'),
          Input('visualization-type', 'value'),
@@ -1284,57 +1525,116 @@ def create_enhanced_radar_dashboard(df):
          Input('reset-btn', 'n_clicks')],
         [State('metrics-dropdown', 'options')]
     )
-    def update_dashboard(selected_metrics, normalize, selected_groups, selected_pilot, visualization_type,
+    def update_dashboard(selected_metrics, selected_groups, selected_pilot, visualization_type,
                          pattern_chart_type, mode_switch_value, reset_clicks, metric_options):
         # Handle reset button
         ctx = callback_context
         if ctx.triggered and ctx.triggered[0]['prop_id'] == 'reset-btn.n_clicks':
             selected_metrics = default_metrics
-            normalize = True
             selected_groups = ["Successful", "Unsuccessful"]
             selected_pilot = None
-            visualization_type = 'radar'
+            visualization_type = 'linear'
             pattern_chart_type = 'attention_distribution'
             mode_switch_value = False
 
         # Handle pattern chart types when in Patterns mode
         if mode_switch_value:
+            pattern_data_for_display = None
+
             if pattern_chart_type == 'attention_distribution':
                 fig = create_attention_distribution_figure()
             elif pattern_chart_type == 'aoi_differences':
                 fig = create_aoi_differences_figure()
             elif pattern_chart_type == 'success_patterns':
-                fig = create_success_patterns_figure()
+                fig, pattern_data_for_display = create_success_patterns_figure()
             elif pattern_chart_type == 'fail_patterns':
-                fig = create_fail_patterns_figure()
+                fig, pattern_data_for_display = create_fail_patterns_figure()
             else:
                 fig = create_attention_distribution_figure()
 
-            # For pattern charts, we don't need the other analysis panels
+            # For pattern charts, enhance the behavior characterization with pattern explanations
             behavior_characterization = []
-            success_analysis = []
+            success_analysis = []  # Keep this empty for pattern mode
             stats_data = {}
 
             # Add pattern insights if data is available
             if pattern_data['available']:
-                behavior_characterization.append(html.H5("Pattern Analysis", className="text-info mb-3"))
+                behavior_characterization.append(html.H5("Pattern Analysis Insights", className="text-info mb-3"))
 
-                # Add some basic insights
-                aoi_labels = list(AOI_NAMES.keys())
-                success_pcts = [(pattern_data['success_aoi'][aoi] / sum(pattern_data['success_aoi'].values())) * 100 for
-                                aoi in aoi_labels]
-                fail_pcts = [(pattern_data['fail_aoi'][aoi] / sum(pattern_data['fail_aoi'].values())) * 100 for aoi in
-                             aoi_labels]
-                differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
-                max_diff_idx = differences.index(max(differences, key=abs))
-                max_diff_aoi = AOI_NAMES[aoi_labels[max_diff_idx]]
+                # Only show Pattern Key for attention_distribution and aoi_differences, not for success/fail patterns
+                if pattern_chart_type in ['attention_distribution', 'aoi_differences']:
+                    behavior_characterization.append(html.Div([
+                        html.Div("🔑 PATTERN KEY", className="pattern-header"),
+                        html.Div([
+                            html.Span("A", className="pattern-key"), html.Span(" = No AOI", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("B", className="pattern-key"),
+                            html.Span(" = Altitude/VSI", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("C", className="pattern-key"),
+                            html.Span(" = Attitude Indicator", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("D", className="pattern-key"),
+                            html.Span(" = Turn/Heading", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("E", className="pattern-key"),
+                            html.Span(" = Speed/Slip Indicator", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("F", className="pattern-key"),
+                            html.Span(" = Airspeed Indicator", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("G", className="pattern-key"), html.Span(" = RPM", className="pattern-meaning"),
+                            html.Br(),
+                            html.Span("H", className="pattern-key"),
+                            html.Span(" = Window (Outside)", className="pattern-meaning")
+                        ], className="pattern-explanation")
+                    ], className="behavior-pattern"))
 
-                behavior_characterization.append(html.Div([
-                    html.Strong("Key Insight:", className="text-light"),
-                    html.Br(),
-                    html.Span(f"Largest attention difference: {max_diff_aoi} ({differences[max_diff_idx]:+.1f}%)",
-                              className="text-light small")
-                ], className="pattern-metric"))
+                # Add pattern list for success/fail patterns
+                if pattern_chart_type == 'success_patterns' and pattern_data_for_display is not None:
+                    behavior_characterization.extend(
+                        create_pattern_list_content(pattern_data_for_display, "SUCCESSFUL PATTERNS DETAIL",
+                                                    success=True)
+                    )
+                elif pattern_chart_type == 'fail_patterns' and pattern_data_for_display is not None:
+                    behavior_characterization.extend(
+                        create_pattern_list_content(pattern_data_for_display, "UNSUCCESSFUL PATTERNS DETAIL",
+                                                    success=False)
+                    )
+
+                # Only show Pattern Interpretation for attention_distribution and aoi_differences, not for success/fail patterns
+                if pattern_chart_type in ['attention_distribution', 'aoi_differences']:
+                    explanations = get_pattern_explanations()
+                    behavior_characterization.append(html.Div([
+                        html.Div("📋 PATTERN INTERPRETATIONS", className="pattern-header"),
+                        *[html.Div([
+                            html.Strong(f"{pattern_type}:", className="text-light"),
+                            html.Span(f" {explanation}", className="pattern-meaning")
+                        ], className="pattern-explanation") for pattern_type, explanation in explanations.items()]
+                    ], className="behavior-pattern"))
+
+                # Add some basic insights for attention distribution and differences charts
+                if pattern_chart_type in ['attention_distribution', 'aoi_differences']:
+                    aoi_labels = list(AOI_NAMES.keys())
+                    success_pcts = [(pattern_data['success_aoi'][aoi] / sum(pattern_data['success_aoi'].values())) * 100
+                                    for
+                                    aoi in aoi_labels]
+                    fail_pcts = [(pattern_data['fail_aoi'][aoi] / sum(pattern_data['fail_aoi'].values())) * 100 for aoi
+                                 in
+                                 aoi_labels]
+                    differences = [s - f for s, f in zip(success_pcts, fail_pcts)]
+                    max_diff_idx = differences.index(max(differences, key=abs))
+                    max_diff_aoi = AOI_NAMES[aoi_labels[max_diff_idx]]
+
+                    behavior_characterization.append(html.Div([
+                        html.Div("🎯 KEY INSIGHT", className="pattern-header"),
+                        html.Div([
+                            html.Strong("Largest attention difference:", className="text-light"),
+                            html.Span(f" {max_diff_aoi} ({differences[max_diff_idx]:+.1f}%)",
+                                      className="stat-difference difference-positive" if differences[
+                                                                                             max_diff_idx] > 0 else "stat-difference difference-negative")
+                        ], className="pattern-metric")
+                    ], className="key-insight"))
 
             return fig, behavior_characterization, success_analysis, stats_data
 
@@ -1344,13 +1644,6 @@ def create_enhanced_radar_dashboard(df):
 
         # Prepare data for other visualization types
         stats_data = {}
-
-        # Normalization function
-        def normalize_series(series):
-            range_val = series.max() - series.min()
-            if range_val == 0:
-                return pd.Series([0.5] * len(series), index=series.index)
-            return (series - series.min()) / range_val
 
         # Add group data to stats_data
         if "Successful" in selected_groups:
@@ -1367,194 +1660,11 @@ def create_enhanced_radar_dashboard(df):
             stats_data[f'Pilot {selected_pilot}'] = df[df['PID'] == selected_pilot][selected_metrics].iloc[0].to_dict()
 
         # Create visualization based on selected type
-        if visualization_type == 'bar':
-            # Bar chart visualization
-            bar_metrics = [k for k in bar_config.keys() if k in df.columns]
-            bar_traces = []
-            individual_bar = [bar_config[m]['name'] for m in bar_metrics]
-
-            if bar_metrics:
-                # Add group traces (bar)
-                if "Successful" in selected_groups:
-                    bar_success_raw = df[df['pilot_success'] == 'Successful'][bar_metrics].mean()
-                    bar_success = normalize_series(bar_success_raw) if normalize else bar_success_raw
-
-                    bar_traces.append(go.Bar(
-                        x=individual_bar,
-                        y=bar_success.values,
-                        name='Successful Pilots',
-                        marker=dict(color='rgb(76, 175, 80)')
-                    ))
-
-                if "Unsuccessful" in selected_groups:
-                    bar_unsuccess_raw = df[df['pilot_success'] == 'Unsuccessful'][bar_metrics].mean()
-                    bar_unsuccess = normalize_series(bar_unsuccess_raw) if normalize else bar_unsuccess_raw
-
-                    bar_traces.append(go.Bar(
-                        x=individual_bar,
-                        y=bar_unsuccess.values,
-                        name='Unsuccessful Pilots',
-                        marker=dict(color='rgb(244, 67, 54)')
-                    ))
-
-            label_y = 'Mean Proportion Fixation Duration' if normalize else 'Metric Value'
-
-            fig = go.Figure(data=bar_traces)
-            fig.update_layout(
-                barmode='group',
-                xaxis=dict(
-                    title=dict(
-                        text='AOI',
-                        font=dict(color='white')
-                    ),
-                    tickfont=dict(color='white')
-                ),
-                yaxis=dict(
-                    title=dict(
-                        text=label_y,
-                        font=dict(color='white')
-                    ),
-                    tickfont=dict(color='white')
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white'),
-                legend=dict(
-                    bgcolor='rgba(0,0,0,0.5)',
-                    font=dict(color='white')
-                ),
-                title=dict(
-                    text='Proportion of Fixation Duration per AOI (Successful vs Unsuccessful)',
-                    font=dict(color='white', size=16),
-                    x=0.5
-                ),
-                height=550
-            )
-
-        elif visualization_type == 'parallel':
-            # Parallel coordinates visualization
-            fig = go.Figure(data=go.Parcoords(
-                line=dict(color=df['Approach_Score'],
-                          colorscale='Viridis',
-                          showscale=True,
-                          cmin=df['Approach_Score'].min(),
-                          cmax=df['Approach_Score'].max()),
-                dimensions=[dict(range=[df[col].min(), df[col].max()],
-                                 label=metrics_config[col]['name'], values=df[col])
-                            for col in selected_metrics]
-            ))
-            fig.update_layout(
-                title="Parallel Coordinates Plot",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white'),
-                height=550
-            )
+        if visualization_type == 'parallel':
+            fig = create_parallel_coordinates_figure(selected_metrics)
         else:
-            # Radar chart visualization (default)
-            traces = []
-
-            # Add group traces
-            if "Successful" in selected_groups:
-                successful_data = df[df['pilot_success'] == 'Successful'][selected_metrics].mean()
-                if normalize:
-                    successful_data = normalize_series(successful_data)
-
-                traces.append(go.Scatterpolar(
-                    r=np.append(successful_data.values, successful_data.values[0]),
-                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                    [metrics_config[selected_metrics[0]]['name']]),
-                    fill='toself',
-                    fillcolor='rgba(76, 175, 80, 0.4)',
-                    line=dict(color='rgb(76, 175, 80)', width=3),
-                    name='Successful Pilots (Avg)',
-                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-                ))
-
-            if "Unsuccessful" in selected_groups:
-                unsuccessful_data = df[df['pilot_success'] == 'Unsuccessful'][selected_metrics].mean()
-                if normalize:
-                    unsuccessful_data = normalize_series(unsuccessful_data)
-
-                traces.append(go.Scatterpolar(
-                    r=np.append(unsuccessful_data.values, unsuccessful_data.values[0]),
-                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                    [metrics_config[selected_metrics[0]]['name']]),
-                    fill='toself',
-                    fillcolor='rgba(244, 67, 54, 0.4)',
-                    line=dict(color='rgb(244, 67, 54)', width=3),
-                    name='Unsuccessful Pilots (Avg)',
-                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-                ))
-
-            if "All" in selected_groups:
-                all_data = df[selected_metrics].mean()
-                if normalize:
-                    all_data = normalize_series(all_data)
-
-                traces.append(go.Scatterpolar(
-                    r=np.append(all_data.values, all_data.values[0]),
-                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                    [metrics_config[selected_metrics[0]]['name']]),
-                    fill='toself',
-                    fillcolor='rgba(33, 150, 243, 0.4)',
-                    line=dict(color='rgb(33, 150, 243)', width=3),
-                    name='All Pilots (Avg)',
-                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-                ))
-
-            # Add individual pilot trace if selected
-            if selected_pilot:
-                pilot_data = df[df['PID'] == selected_pilot][selected_metrics].iloc[0]
-                if normalize:
-                    pilot_data = normalize_series(pilot_data)
-
-                pilot_success = df[df['PID'] == selected_pilot]['pilot_success'].iloc[0]
-                # Use blue color for individual pilots
-                color = 'rgb(33, 150, 243)'  # Blue color for individual pilots
-
-                traces.append(go.Scatterpolar(
-                    r=np.append(pilot_data.values, pilot_data.values[0]),
-                    theta=np.append([metrics_config[m]['name'] for m in selected_metrics],
-                                    [metrics_config[selected_metrics[0]]['name']]),
-                    fill=None,  # No fill for individual pilots
-                    line=dict(color=color, width=4, dash='dash'),
-                    name=f'Pilot {selected_pilot} ({pilot_success})',
-                    hovertemplate='<b>%{theta}</b><br>Value: %{r:.3f}<extra></extra>'
-                ))
-
-            fig = go.Figure(data=traces)
-            fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, 1] if normalize else [df[selected_metrics].min().min(),
-                                                        df[selected_metrics].max().max()],
-                        gridcolor='rgba(255,255,255,0.3)',
-                        tickfont=dict(color='white')
-                    ),
-                    angularaxis=dict(
-                        tickfont=dict(color='white', size=12),
-                        gridcolor='rgba(255,255,255,0.3)',
-                        rotation=90
-                    ),
-                    bgcolor='rgba(0,0,0,0.2)'
-                ),
-                showlegend=True,
-                legend=dict(
-                    bgcolor='rgba(0,0,0,0.5)',
-                    font=dict(color='white')
-                ),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white'),
-                height=550,
-                title=dict(
-                    text=f"Gaze Behavior Profile Comparison<br><sub>{'Normalized ' if normalize else ''}Metrics: {len(selected_metrics)} selected</sub>",
-                    font=dict(color='white', size=16),
-                    x=0.5
-                )
-            )
+            # Default to linear scale visualization
+            fig = create_linear_scale_figure(selected_metrics, selected_groups, selected_pilot)
 
         # Create behavior characterization (only for group comparisons)
         behavior_characterization = characterize_behavior(selected_metrics, stats_data)
@@ -1568,7 +1678,7 @@ def create_enhanced_radar_dashboard(df):
 
 
 # Create and run the dashboard
-print("Starting Enhanced Radar Chart Dashboard...")
+print("Starting Enhanced Dashboard with Linear Scale Visualization...")
 print("Loading data from AOI_DGMs.csv...")
 print(f"Loaded {len(df)} pilots")
 print(f"Successful: {len(df[df['pilot_success'] == 'Successful'])}")
