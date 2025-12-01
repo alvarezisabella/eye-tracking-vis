@@ -403,15 +403,6 @@ def create_enhanced_radar_dashboard(df):
                     margin-top: 2px;
                 }
 
-                .iqr-explanation {
-                    background: rgba(255,255,255,0.05);
-                    padding: 8px;
-                    border-radius: 4px;
-                    border-left: 4px solid #42a5f5;
-                    margin: 10px 0;
-                    font-size: 0.8em;
-                }
-
                 /* Behavior Characterization Styles */
                 .behavior-pattern {
                     background: rgba(255,255,255,0.05);
@@ -714,14 +705,14 @@ def create_enhanced_radar_dashboard(df):
                 unsuccessful_vals = unsuccessful_df[metric]
 
                 benchmarks[metric] = {
-                    'success_iqr': (successful_vals.quantile(0.25), successful_vals.quantile(0.75)),
                     'success_mean': successful_vals.mean(),
                     'success_median': successful_vals.median(),
                     'unsuccess_mean': unsuccessful_vals.mean(),
                     'unsuccess_median': unsuccessful_vals.median(),
                     'all_range': (df[metric].min(), df[metric].max()),
                     'difference': successful_vals.mean() - unsuccessful_vals.mean(),
-                    'difference_pct': ((successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
+                    'difference_pct': ((
+                                                   successful_vals.mean() - unsuccessful_vals.mean()) / unsuccessful_vals.mean() * 100) if unsuccessful_vals.mean() != 0 else 0
                 }
 
         # Add Approach Score benchmarks separately
@@ -730,14 +721,14 @@ def create_enhanced_radar_dashboard(df):
             unsuccessful_scores = unsuccessful_df['Approach_Score']
 
             benchmarks['Approach_Score'] = {
-                'success_iqr': (successful_scores.quantile(0.25), successful_scores.quantile(0.75)),
                 'success_mean': successful_scores.mean(),
                 'success_median': successful_scores.median(),
                 'unsuccess_mean': unsuccessful_scores.mean(),
                 'unsuccess_median': unsuccessful_scores.median(),
                 'all_range': (df['Approach_Score'].min(), df['Approach_Score'].max()),
                 'difference': successful_scores.mean() - unsuccessful_scores.mean(),
-                'difference_pct': ((successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
+                'difference_pct': (
+                            (successful_scores.mean() - unsuccessful_scores.mean()) / unsuccessful_scores.mean() * 100),
                 'threshold': 0.7  # Success threshold
             }
 
@@ -1242,15 +1233,6 @@ def create_enhanced_radar_dashboard(df):
                 characterization_content.append(html.P("No significant differences found in selected metrics.",
                                                        className="text-light small"))
 
-            # Statistical Significance Note
-            characterization_content.append(html.Div([
-                html.Div("📈 STATISTICAL NOTE", className="pattern-header"),
-                html.P("Differences shown are based on group averages with >10% magnitude. ",
-                       className="text-light small mb-0"),
-                html.P("IQR analysis confirms consistent pattern differences between groups.",
-                       className="text-light small mb-0")
-            ], className="behavior-pattern"))
-
         return characterization_content
 
     def analyze_success_patterns(selected_metrics, stats_data, selected_pilot=None):
@@ -1271,22 +1253,10 @@ def create_enhanced_radar_dashboard(df):
 
                 analysis_content.append(html.Div(status_text, className=status_class))
 
-                # Add IQR explanation
-                iqr_explanation = html.Div([
-                    html.Strong("📊 About IQR (Interquartile Range):", className="text-light"),
-                    html.Br(),
-                    html.Span("IQR shows the middle 50% of successful pilots (25th to 75th percentile). ",
-                              className="text-light small"),
-                    html.Span("Values within IQR represent typical expert performance.", className="text-light small")
-                ], className="iqr-explanation")
-
-                analysis_content.append(iqr_explanation)
-
                 # Add Approach Score section
                 if 'Approach_Score' in df.columns and 'Approach_Score' in benchmarks:
                     pilot_score = df[df['PID'] == selected_pilot]['Approach_Score'].iloc[0]
                     bench = benchmarks['Approach_Score']
-                    success_iqr_low, success_iqr_high = bench['success_iqr']
                     threshold = bench['threshold']
 
                     # Determine score status
@@ -1323,8 +1293,8 @@ def create_enhanced_radar_dashboard(df):
                         html.Div([
                             html.Strong("Success Threshold: ≥ 0.7", className="text-light"),
                             html.Br(),
-                            html.Span(f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f}",
-                                      className="iqr-text iqr-good")
+                            html.Span(f"Successful average: {bench['success_mean']:.3f}",
+                                      className="text-success")
                         ], className="threshold-info")
                     ])
 
@@ -1333,46 +1303,106 @@ def create_enhanced_radar_dashboard(df):
                 # Show ALL metrics with detailed statistical analysis
                 analysis_content.append(html.H6("Gaze Metrics Analysis:", className="text-info mt-3"))
 
+                # Get group averages for comparison
+                success_avg = successful_df[selected_metrics].mean().to_dict()
+                unsuccess_avg = unsuccessful_df[selected_metrics].mean().to_dict()
+
                 for metric in selected_metrics:
-                    if metric in pilot_data and metric in benchmarks:
+                    if metric in pilot_data:
+                        # SKIP Approach Score - it has its own special box
+                        if metric == 'Approach_Score':
+                            continue  # Skip this metric in the list
+
                         value = pilot_data[metric]
-                        bench = benchmarks[metric]
-                        success_iqr_low, success_iqr_high = bench['success_iqr']
+                        success_value = success_avg.get(metric, 0)
+                        unsuccess_value = unsuccess_avg.get(metric, 0)
 
-                        # Determine status and reasoning based only on success IQR
-                        if success_iqr_low <= value <= success_iqr_high:
-                            status_class = "metric-good"
-                            reasoning = f"Within typical successful range (IQR)"
-                            iqr_color_class = "iqr-good"
-                        elif value < success_iqr_low:
-                            if 'entropy' in metric:
-                                status_class = "metric-good"
-                                reasoning = f"Better than typical - more systematic"
-                                iqr_color_class = "iqr-good"
-                            else:
-                                status_class = "metric-bad"
-                                reasoning = f"Below typical successful range"
-                                iqr_color_class = "iqr-bad"
+                        # Calculate percentage difference from successful average
+                        if success_value != 0:
+                            diff_pct_success = ((value - success_value) / success_value) * 100
                         else:
-                            if 'entropy' in metric:
+                            diff_pct_success = 0
+
+                        # Calculate percentage difference from unsuccessful average
+                        if unsuccess_value != 0:
+                            diff_pct_unsuccess = ((value - unsuccess_value) / unsuccess_value) * 100
+                        else:
+                            diff_pct_unsuccess = 0
+
+                        # Determine good/bad based on proximity to successful vs unsuccessful averages
+                        # CHANGED: Mark as bad if too close to unsuccessful average
+
+                        # First, calculate absolute distances from each average
+                        dist_from_success = abs(diff_pct_success)
+                        dist_from_unsuccess = abs(diff_pct_unsuccess)
+
+                        # Check which average the pilot is closer to
+                        is_closer_to_success = dist_from_success < dist_from_unsuccess
+                        is_closer_to_unsuccess = dist_from_unsuccess < dist_from_success
+
+                        # For entropy metrics (lower is better)
+                        if metric in ['stationary_entropy', 'transition_entropy']:
+                            # ENTROPY METRICS: Lower is better (more systematic)
+                            # If closer to unsuccessful average, mark as bad
+                            if is_closer_to_unsuccess and dist_from_unsuccess < 20:
                                 status_class = "metric-bad"
-                                reasoning = f"Above typical successful range - less systematic"
-                                iqr_color_class = "iqr-bad"
+                                reasoning = f"Closer to unsuccessful average ({unsuccess_value:.3f}) - needs more systematic scanning"
+                            elif diff_pct_success <= 10:  # Within 10% of success average or lower
+                                status_class = "metric-good"
+                                if diff_pct_success <= 0:
+                                    reasoning = f"Better or equal to successful average ({success_value:.3f})"
+                                else:
+                                    reasoning = f"Close to successful average ({success_value:.3f})"
+                            else:  # More than 10% different from success average
+                                status_class = "metric-bad"
+                                reasoning = f"Not close to successful average ({success_value:.3f})"
+
+                        # For blink rate (moderate is best)
+                        elif metric == 'Average_Blink_Rate_per_Minute':
+                            # BLINK RATE: Moderate is best
+                            # If closer to unsuccessful average, mark as bad
+                            if is_closer_to_unsuccess and dist_from_unsuccess < 25:
+                                status_class = "metric-bad"
+                                reasoning = f"Closer to unsuccessful average ({unsuccess_value:.3f}) - may indicate stress"
+                            elif abs(diff_pct_success) <= 25:
+                                status_class = "metric-good"
+                                reasoning = f"Within normal blink rate range ({success_value:.3f})"
+                            elif diff_pct_success > 25:
+                                status_class = "metric-bad"
+                                reasoning = f"Too high - {abs(diff_pct_success):.0f}% above successful average ({success_value:.3f})"
                             else:
                                 status_class = "metric-bad"
-                                reasoning = f"Above typical successful range"
-                                iqr_color_class = "iqr-bad"
+                                reasoning = f"Too low - {abs(diff_pct_success):.0f}% below successful average ({success_value:.3f})"
 
-                        # Create metric item with description and IQR data
+                        # For other metrics
+                        else:
+                            # GENERAL RULE: If closer to unsuccessful average (within 15%), mark as bad
+                            if is_closer_to_unsuccess and dist_from_unsuccess < 15:
+                                status_class = "metric-bad"
+                                reasoning = f"Closer to unsuccessful average ({unsuccess_value:.3f}) - needs improvement"
+                            elif abs(diff_pct_success) <= 15:
+                                status_class = "metric-good"
+                                reasoning = f"Close to successful average ({success_value:.3f})"
+                            elif diff_pct_success > 15:
+                                status_class = "metric-bad"
+                                reasoning = f"Too high - {abs(diff_pct_success):.0f}% above successful average ({success_value:.3f})"
+                            else:
+                                status_class = "metric-bad"
+                                reasoning = f"Too low - {abs(diff_pct_success):.0f}% below successful average ({success_value:.3f})"
+
+                        # Create metric item with description and comparison data
                         metric_item = html.Div([
                             html.Strong(f"{metrics_config[metric]['name']}: {value:.3f}", className="text-light"),
+                            html.Span(f" ({diff_pct_success:+.0f}% vs successful avg)",
+                                      className="text-warning" if abs(diff_pct_success) <= 20 else "text-danger"),
                             html.Br(),
                             html.Span(f"{metrics_config[metric]['description']}", className="metric-description"),
                             html.Br(),
                             html.Span(f"Status: {reasoning}", className="text-light small"),
                             html.Br(),
-                            html.Span(f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f}",
-                                      className=f"iqr-text {iqr_color_class}")
+                            html.Span(f"Successful average: {success_value:.3f}", className="text-success"),
+                            html.Br(),
+                            html.Span(f"Unsuccessful average: {unsuccess_value:.3f}", className="text-danger")
                         ], className=f"metric-item {status_class}")
 
                         analysis_content.append(metric_item)
@@ -1380,35 +1410,80 @@ def create_enhanced_radar_dashboard(df):
                 # Summary section
                 analysis_content.append(html.H6("Performance Summary:", className="text-warning mt-3"))
 
-                if pilot_success == 'Successful':
-                    analysis_content.append(html.P(
-                        "This pilot demonstrates strong expert gaze patterns with metrics predominantly within typical successful ranges.",
-                        className="text-light small"))
+                if selected_pilot:
+                    # Analyze metrics by deviation from success average
+                    close_to_success = []
+                    close_to_unsuccess = []
+                    other_metrics = []
+
+                    for metric in selected_metrics:
+                        if metric in pilot_data and metric != 'Approach_Score':
+                            value = pilot_data[metric]
+                            success_val = success_avg.get(metric, 0)
+                            unsuccess_val = unsuccess_avg.get(metric, 0)
+
+                            # Calculate distances
+                            if success_val != 0:
+                                dist_from_success = abs((value - success_val) / success_val) * 100
+                            else:
+                                dist_from_success = 0
+
+                            if unsuccess_val != 0:
+                                dist_from_unsuccess = abs((value - unsuccess_val) / unsuccess_val) * 100
+                            else:
+                                dist_from_unsuccess = 0
+
+                            # Categorize
+                            if dist_from_unsuccess < 15 and dist_from_unsuccess < dist_from_success:
+                                close_to_unsuccess.append(metric)
+                            elif dist_from_success <= 15:
+                                close_to_success.append(metric)
+                            else:
+                                other_metrics.append(metric)
+
+                    total = len(close_to_success) + len(close_to_unsuccess) + len(other_metrics)
+
+                    if total > 0:
+                        summary_text = f"Metrics compared to group averages:"
+                        analysis_content.append(html.P(summary_text, className="text-light small"))
+
+                        if close_to_success:
+                            analysis_content.append(html.P(
+                                f"✓ {len(close_to_success)} metrics close to successful average",
+                                className="text-success small mb-1"))
+
+                        if close_to_unsuccess:
+                            close_names = [metrics_config[m]['name'] for m in close_to_unsuccess[:5]]  # Show first 5
+                            analysis_content.append(html.P(
+                                f"✗ {len(close_to_unsuccess)} metrics close to unsuccessful average: {', '.join(close_names)}",
+                                className="text-danger small mb-1"))
+
+                        if other_metrics:
+                            analysis_content.append(html.P(
+                                f"⚠ {len(other_metrics)} metrics not close to either group average",
+                                className="text-warning small mb-1"))
+                    else:
+                        # For unsuccessful pilots
+                        analysis_content.append(html.P(
+                            f"This pilot shows gaze patterns that differ significantly from successful group averages.",
+                            className="text-light small"))
                 else:
+                    # Group comparison summary
                     analysis_content.append(html.P(
-                        "This pilot shows suboptimal gaze behaviors with several metrics outside typical successful patterns.",
+                        f"Comparing {len(successful_df)} successful vs {len(unsuccessful_df)} unsuccessful pilots.",
+                        className="text-light small"))
+                    analysis_content.append(html.P(
+                        "Analysis based on group averages shown in the graph above.",
                         className="text-light small"))
 
         else:
             # Group comparison analysis
             analysis_content.append(html.H5("Group Performance Analysis", className="text-info mb-3"))
 
-            # Add IQR explanation
-            iqr_explanation = html.Div([
-                html.Strong("📊 About IQR (Interquartile Range):", className="text-light"),
-                html.Br(),
-                html.Span("IQR shows the middle 50% of successful pilots (25th to 75th percentile). ",
-                          className="text-light small"),
-                html.Span("Values within IQR represent typical expert performance.", className="text-light small")
-            ], className="iqr-explanation")
-
-            analysis_content.append(iqr_explanation)
-
             # Add Approach Score comparison
             if 'Approach_Score' in df.columns and 'Approach_Score' in benchmarks:
                 bench = benchmarks['Approach_Score']
                 threshold = bench['threshold']
-                success_iqr_low, success_iqr_high = bench['success_iqr']
 
                 analysis_content.append(html.H6("Approach Score Comparison:", className="text-warning"))
 
@@ -1416,8 +1491,8 @@ def create_enhanced_radar_dashboard(df):
                     html.Strong("Success Threshold: ≥ 0.7", className="text-light"),
                     html.Br(),
                     html.Span(
-                        f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f} (avg: {bench['success_mean']:.3f})",
-                        className="iqr-text iqr-good")
+                        f"Successful average: {bench['success_mean']:.3f}",
+                        className="text-success")
                 ], className="stat-highlight good-stat")
 
                 analysis_content.append(approach_comparison)
@@ -1427,38 +1502,33 @@ def create_enhanced_radar_dashboard(df):
                 successful_data = stats_data['Successful']
                 unsuccessful_data = stats_data['Unsuccessful']
 
-                # Show ALL metrics comparison with only success IQR
+                # Show ALL metrics comparison with averages
                 analysis_content.append(html.H6("Gaze Metrics Comparison:", className="text-warning"))
 
                 for metric in selected_metrics:
-                    if metric in successful_data and metric in unsuccessful_data and metric in benchmarks:
+                    if metric in successful_data and metric in unsuccessful_data:
                         success_val = successful_data[metric]
                         unsuccess_val = unsuccessful_data[metric]
-                        bench = benchmarks[metric]
-                        success_iqr_low, success_iqr_high = bench['success_iqr']
+                        diff_pct = ((success_val - unsuccess_val) / unsuccess_val * 100) if unsuccess_val != 0 else 0
 
-                        # Simple comparison - check if unsuccessful average is within success IQR
-                        if success_iqr_low <= unsuccess_val <= success_iqr_high:
-                            status_class = "neutral-stat"
-                            comparison = f"Unsuccessful avg within typical successful range"
-                        else:
+                        # Determine if difference is significant
+                        if abs(diff_pct) > 15:  # More than 15% difference
                             status_class = "good-stat"
-                            comparison = f"Clear difference from typical successful pattern"
+                            comparison = f"Significant difference ({diff_pct:+.1f}%)"
+                        else:
+                            status_class = "neutral-stat"
+                            comparison = f"Similar values ({diff_pct:+.1f}%)"
 
                         metric_item = html.Div([
                             html.Strong(f"{metrics_config[metric]['name']}: ", className="text-light"),
                             html.Br(),
                             html.Span(f"{metrics_config[metric]['description']}", className="metric-description"),
                             html.Br(),
-                            html.Span(
-                                f"Successful IQR: {success_iqr_low:.3f} - {success_iqr_high:.3f} (avg: {success_val:.3f})",
-                                className="iqr-text iqr-good"),
+                            html.Span(f"Successful average: {success_val:.3f}", className="text-success"),
                             html.Br(),
-                            html.Span(f"Unsuccessful average: {unsuccess_val:.3f}",
-                                      className="text-danger"),
+                            html.Span(f"Unsuccessful average: {unsuccess_val:.3f}", className="text-danger"),
                             html.Br(),
-                            html.Span(f"Comparison: {comparison}",
-                                      className="text-light")
+                            html.Span(f"Comparison: {comparison}", className="text-light")
                         ], className=f"stat-highlight {status_class}")
 
                         analysis_content.append(metric_item)
@@ -1566,7 +1636,8 @@ def create_enhanced_radar_dashboard(df):
                     behavior_characterization.append(html.Div([
                         html.Div("🔑 PATTERN KEY", className="pattern-header"),
                         html.Div([
-                            html.Span("A", className="pattern-key"), html.Span(" = No AOI", className="pattern-meaning"),
+                            html.Span("A", className="pattern-key"),
+                            html.Span(" = No AOI", className="pattern-meaning"),
                             html.Br(),
                             html.Span("B", className="pattern-key"),
                             html.Span(" = Altitude/VSI", className="pattern-meaning"),
